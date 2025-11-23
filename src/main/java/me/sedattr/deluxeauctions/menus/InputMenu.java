@@ -76,6 +76,7 @@ public class InputMenu {
 
                         return Collections.singletonList(AnvilGUI.ResponseAction.close());
                     }).text(Utils.colorize((DeluxeAuctions.getInstance().messagesFile.getString("input_lines.anvil." + textType))))
+                    .preventClose()
                     .plugin(DeluxeAuctions.getInstance());
 
             if (TaskUtils.isFolia)

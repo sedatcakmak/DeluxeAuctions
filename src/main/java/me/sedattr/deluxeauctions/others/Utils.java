@@ -2,11 +2,8 @@ package me.sedattr.deluxeauctions.others;
 
 import com.google.common.collect.ImmutableMultimap;
 import me.sedattr.deluxeauctions.DeluxeAuctions;
+import net.kyori.adventure.text.Component;
 import net.md_5.bungee.api.ChatColor;
-import net.md_5.bungee.api.chat.BaseComponent;
-import net.md_5.bungee.api.chat.ClickEvent;
-import net.md_5.bungee.api.chat.HoverEvent;
-import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -19,6 +16,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.util.io.BukkitObjectInputStream;
 import org.bukkit.util.io.BukkitObjectOutputStream;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
 
 import java.io.ByteArrayInputStream;
@@ -264,27 +263,31 @@ public class Utils {
                 return;
             }
 
+            String sendPermission = section.getString("send_permission", "");
+            if (!sendPermission.isEmpty()) {
+                if (!player.hasPermission(sendPermission) && !player.isOp()) {
+                    Utils.sendMessage(player, type, placeholderUtil);
+                    return;
+                }
+            }
+
             if (type.endsWith("broadcast") && section.getBoolean("check_if_muted") && DeluxeAuctions.getInstance().muteManager != null)
                 if (DeluxeAuctions.getInstance().muteManager.isMuted(player))
                     return;
 
-            List<String> commands = section.getStringList("commands");
-            if (!commands.isEmpty())
-                for (String command : commands) {
-                    command = command
-                            .replace("%player_displayname%", player.getDisplayName())
-                            .replace("%player_name%", player.getName())
-                            .replace("%player_uuid%", String.valueOf(player.getUniqueId()));
+            for (String command : section.getStringList("commands")) {
+                String parsed = command
+                        .replace("%player_displayname%", player.getDisplayName())
+                        .replace("%player_name%", player.getName())
+                        .replace("%player_uuid%", String.valueOf(player.getUniqueId()));
 
-                    if (command.startsWith("[player]"))
-                        player.performCommand(command
-                                .replace("[player] ", "")
-                                .replace("[player]", ""));
+                TaskUtils.run(() -> {
+                    if (parsed.startsWith("[player]"))
+                        player.performCommand(parsed.replace("[player]", "").trim());
                     else
-                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command
-                                .replace("[console] ", "")
-                                .replace("[console]", ""));
-                }
+                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), parsed.replace("[console]", "").trim());
+                });
+            }
 
             String message = DeluxeAuctions.getInstance().messagesFile.getString(type, "");
             if (message.isEmpty())
@@ -297,20 +300,40 @@ public class Utils {
             }
 
             String hover = section.getString(type + ".hover");
+            String clickType = section.getString(type + ".type", "SUGGEST_COMMAND");
 
-            BaseComponent[] component = TextComponent.fromLegacyText(Utils.colorize(Utils.replacePlaceholders(message, placeholderUtil)));
-            BaseComponent[] component2 = TextComponent.fromLegacyText(Utils.colorize(Utils.replacePlaceholders(hover, placeholderUtil)));
-            for (BaseComponent comp : component) {
-                if (hover != null && !hover.isEmpty())
-                    comp.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, component2));
+            Component base = Component.text(Utils.colorize(Utils.replacePlaceholders(message, placeholderUtil)));
 
-                comp.setClickEvent(new ClickEvent(ClickEvent.Action.valueOf(section.getString(type + ".type", "SUGGEST_COMMAND")), Utils.replacePlaceholders(text, placeholderUtil)));
+            if (hover != null && !hover.isEmpty()) {
+                Component hoverComp = Component.text(Utils.colorize(Utils.replacePlaceholders(hover, placeholderUtil)));
+                base = base.hoverEvent(HoverEvent.showText(hoverComp));
             }
 
-            if (type.contains("broadcast"))
-                Bukkit.spigot().broadcast(component);
-            else
-                player.spigot().sendMessage(component);
+            try {
+                ClickEvent.Action action = ClickEvent.Action.valueOf(clickType);
+                base = base.clickEvent(ClickEvent.clickEvent(action, Utils.replacePlaceholders(text, placeholderUtil)));
+            } catch (IllegalArgumentException ignored) {}
+
+            Component finalBase = base;
+
+            String seePermission = section.getString("see_permission", "");
+
+            TaskUtils.run(() -> {
+                if (type.contains("broadcast")) {
+                    if (!seePermission.isEmpty()) {
+                        for (Player online : Bukkit.getOnlinePlayers()) {
+                            if (!online.hasPermission(seePermission) && !online.isOp())
+                                continue;
+
+                            online.sendMessage(finalBase);
+                        }
+                    } else {
+                        Bukkit.getServer().sendMessage(finalBase);
+                    }
+                }
+                else
+                    player.sendMessage(finalBase);
+            });
         });
     }
 

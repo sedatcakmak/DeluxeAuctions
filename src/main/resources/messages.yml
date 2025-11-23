@@ -44,6 +44,7 @@ admin_usage:
   - "&8- &c/%command_name% convert [auctionmaster/zauctionhouse]: &fConverts auctions from other plugins."
   - "&8- &c/%command_name% reload: &fReloads plugin."
 view_usage: "&cCorrect Usage: &7/%command_name% view [player name/auction uuid]"
+search_usage: "&cCorrect Usage: &7/%command_name% search [input]"
 sell_usage: "&cCorrect Usage: &7/%command_name% sell [price] (duration) (bin/normal)"
 admin_cancel_usage: "&cCorrect Usage: &7/%command_name% cancel [auction uuid]"
 admin_convert_usage: "&cCorrect Usage: &7/%command_name% convert [auctionmaster/zauctionhouse]"

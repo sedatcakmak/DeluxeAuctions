@@ -71,6 +71,8 @@ settings:
 # Messages can be found in the messages.yml file.
 broadcast_messages:
   enabled: true
+  send_permission: "deluxeauctions.sendpermission"
+  see_permission: "deluxeauctions.seepermission"
   check_if_muted: false # Broadcasts will not be sent if the player is muted. (Currently AdvancedBans and LiteBans supported)
   # Commands can be executed along with the broadcasts.
   # Examples:
@@ -274,6 +276,7 @@ permissions:
     command: ""
     menu: ""
     sell: ""
+    search: ""
     auctions: "auctions.auctions"
     view: "auctions.view"
     bids: "auctions.bids"
@@ -288,6 +291,8 @@ permissions:
 
 # PLUGIN COMMAND ARGS
 commands:
+  search:
+    - search
   convert:
     - convert
   cancel:

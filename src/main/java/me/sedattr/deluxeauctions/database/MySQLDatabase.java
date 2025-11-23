@@ -265,21 +265,7 @@ public class MySQLDatabase implements DatabaseManager {
                     i++;
                 }
 
-                DeluxeAuctions.getInstance().loaded = true;
-                if (Bukkit.getPluginManager().isPluginEnabled("DeluxeAuctionsRedis")) {
-                    me.sedattr.deluxeauctionsredis.RedisPlugin redis = (RedisPlugin) Bukkit.getPluginManager()
-                            .getPlugin("DeluxeAuctionsRedis");
-                    if (redis != null && redis.isLoaded()) {
-                        DeluxeAuctions.getInstance().multiServerManager = new RedisAddon();
-                        Logger.sendConsoleMessage("Enabled &fDeluxeAuctions Redis %level_color%support!",
-                                Logger.LogLevel.INFO);
-                    }
-                } else if (DeluxeAuctions.getInstance().configFile.getBoolean("addons.bungeecord", false)) {
-                    DeluxeAuctions.getInstance().multiServerManager = new BungeeAddon();
-                    Logger.sendConsoleMessage("Enabled &fDeluxeAuctions Bungee %level_color%support!",
-                            Logger.LogLevel.INFO);
-                }
-
+                start();
                 Logger.sendConsoleMessage("&f" + i + " %level_color%auctions loaded in &f"
                         + (System.currentTimeMillis() - time) + " ms%level_color%!", Logger.LogLevel.INFO);
             } catch (SQLException x) {
@@ -287,6 +273,26 @@ public class MySQLDatabase implements DatabaseManager {
             }
         });
         return true;
+    }
+
+    private void start() {
+        if (DeluxeAuctions.getInstance().loaded)
+            return;
+
+        DeluxeAuctions.getInstance().loaded = true;
+        if (Bukkit.getPluginManager().isPluginEnabled("DeluxeAuctionsRedis")) {
+            me.sedattr.deluxeauctionsredis.RedisPlugin redis = (RedisPlugin) Bukkit.getPluginManager()
+                    .getPlugin("DeluxeAuctionsRedis");
+            if (redis != null && redis.isLoaded()) {
+                DeluxeAuctions.getInstance().multiServerManager = new RedisAddon();
+                Logger.sendConsoleMessage("Enabled &fDeluxeAuctions Redis %level_color%support!",
+                        Logger.LogLevel.INFO);
+            }
+        } else if (DeluxeAuctions.getInstance().configFile.getBoolean("addons.bungeecord", false)) {
+            DeluxeAuctions.getInstance().multiServerManager = new BungeeAddon();
+            Logger.sendConsoleMessage("Enabled &fDeluxeAuctions Bungee %level_color%support!",
+                    Logger.LogLevel.INFO);
+        }
     }
 
     public void loadAuction(UUID uuid) {

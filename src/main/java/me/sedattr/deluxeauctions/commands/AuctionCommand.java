@@ -32,6 +32,7 @@ public class AuctionCommand implements CommandExecutor, TabCompleter {
             this.args.put("menu", Arrays.asList("menu", "open"));
             this.args.put("sell", Collections.singletonList("sell"));
             this.args.put("auctions", Collections.singletonList("auctions"));
+            this.args.put("search", Collections.singletonList("search"));
             this.args.put("view", Collections.singletonList("view"));
             this.args.put("manage", Collections.singletonList("manage"));
             this.args.put("bids", Collections.singletonList("bids"));
@@ -40,6 +41,7 @@ public class AuctionCommand implements CommandExecutor, TabCompleter {
             this.args.put("menu", section.getStringList("menu"));
             this.args.put("sell", section.getStringList("sell"));
             this.args.put("auctions", section.getStringList("auctions"));
+            this.args.put("search", section.getStringList("search"));
             this.args.put("view", section.getStringList("view"));
             this.args.put("manage", section.getStringList("manage"));
             this.args.put("bids", section.getStringList("bids"));
@@ -163,6 +165,25 @@ public class AuctionCommand implements CommandExecutor, TabCompleter {
                 }
 
                 new ManageMenu(player).open(1, "command");
+                return true;
+            }
+
+            if (this.args.get("search").contains(lowerCaseArg)) {
+                if (!Utils.hasPermission(commandSender, "player_commands", "search")) {
+                    Utils.sendMessage(commandSender, "no_permission");
+                    return false;
+                }
+
+                if (args.length < 2) {
+                    Utils.sendMessage(commandSender, "search_usage");
+                    return false;
+                }
+
+                String search = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
+                PlayerPreferences playerAuction = PlayerCache.getPreferences(player.getUniqueId());
+                playerAuction.setSearch(search);
+
+                new AuctionsMenu(player).open("search", 1);
                 return true;
             }
 

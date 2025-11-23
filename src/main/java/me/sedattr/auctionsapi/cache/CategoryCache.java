@@ -55,12 +55,12 @@ public class CategoryCache {
             if (ecoItem != null && ecoItem.isSimilar(itemStack))
                 return true;
         }
+        if (itemStack == null)
+            return false;
 
         CustomItem customItem = DeluxeAuctions.getInstance().customItems.get(item);
         if (customItem == null)
             return false;
-        if (itemStack == null)
-            return true;
 
         String type = customItem.getType();
         List<String> lore = customItem.getLore();
@@ -70,8 +70,16 @@ public class CategoryCache {
             if (itemLore.isEmpty())
                 return false;
 
-            if (type.equalsIgnoreCase("contains_lore"))
-                return new HashSet<>(itemLore).containsAll(lore);
+            if (type.equalsIgnoreCase("contains_lore")) {
+                for (String line : itemLore) {
+                    for (String required : lore) {
+                        if (line.contains(Utils.colorize(required)))
+                            return true;
+                    }
+                }
+
+                return false;
+            }
             else if (!lore.equals(itemLore))
                 return false;
         }
@@ -129,37 +137,56 @@ public class CategoryCache {
                     continue;
                 }
 
-                if (itemStack.getType().name().equals(item)) {
+                String name = itemStack.getType().name();
+                if (name.equals(item)) {
                     custom = category.getName();
                     continue;
                 }
 
                 if (item.equalsIgnoreCase("all_spawn_eggs"))
-                    if (itemStack.getType().name().endsWith("SPAWN_EGG")) {
+                    if (name.endsWith("SPAWN_EGG")) {
+                        custom = category.getName();
+                        continue;
+                    }
+
+                if (item.equalsIgnoreCase("all_armors"))
+                    if (name.endsWith("HELMET") || name.endsWith("CHESTPLATE") || name.endsWith("LEGGINGS") || name.endsWith("BOOTS")) {
+                        custom = category.getName();
+                        continue;
+                    }
+
+                if (item.equalsIgnoreCase("all_swords"))
+                    if (name.endsWith("SWORD")) {
+                        custom = category.getName();
+                        continue;
+                    }
+
+                if (item.equalsIgnoreCase("all_potions"))
+                    if (name.endsWith("POTION")) {
                         custom = category.getName();
                         continue;
                     }
 
                 if (item.equalsIgnoreCase("all_ingots"))
-                    if (itemStack.getType().name().endsWith("INGOT")) {
+                    if (name.endsWith("INGOT")) {
                         custom = category.getName();
                         continue;
                     }
 
                 if (item.equalsIgnoreCase("all_nuggets"))
-                    if (itemStack.getType().name().endsWith("NUGGET")) {
+                    if (name.endsWith("NUGGET")) {
                         custom = category.getName();
                         continue;
                     }
 
                 if (item.equalsIgnoreCase("all_templates"))
-                    if (itemStack.getType().name().endsWith("TEMPLATE")) {
+                    if (name.endsWith("TEMPLATE")) {
                         custom = category.getName();
                         continue;
                     }
 
                 if (item.equalsIgnoreCase("all_dyes"))
-                    if (itemStack.getType().name().endsWith("DYE")) {
+                    if (name.endsWith("DYE")) {
                         custom = category.getName();
                         continue;
                     }
