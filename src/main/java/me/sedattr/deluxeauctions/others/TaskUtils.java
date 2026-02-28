@@ -33,7 +33,7 @@ public final class TaskUtils {
 
     public static void runAsync(Runnable runnable) {
         if (isFolia) {
-            DeluxeAuctions.getInstance().getServer().getGlobalRegionScheduler().execute(DeluxeAuctions.getInstance(), runnable);
+            DeluxeAuctions.getInstance().getServer().getAsyncScheduler().runNow(DeluxeAuctions.getInstance(), scheduledTask -> runnable.run());
         } else {
             new BukkitRunnable() {
                 @Override
@@ -59,7 +59,7 @@ public final class TaskUtils {
 
     public static void runLaterAsync(Runnable runnable, long delayTicks) {
         if (isFolia) {
-            DeluxeAuctions.getInstance().getServer().getGlobalRegionScheduler().runDelayed(DeluxeAuctions.getInstance(), task -> runnable.run(), delayTicks);
+            DeluxeAuctions.getInstance().getServer().getAsyncScheduler().runDelayed(DeluxeAuctions.getInstance(), scheduledTask -> runnable.run(), delayTicks * 50, java.util.concurrent.TimeUnit.MILLISECONDS);
         } else {
             new BukkitRunnable() {
                 @Override
@@ -72,7 +72,7 @@ public final class TaskUtils {
 
     public static void runTimerAsync(Runnable runnable, long delayTicks, long periodTicks) {
         if (isFolia) {
-            DeluxeAuctions.getInstance().getServer().getGlobalRegionScheduler().runAtFixedRate(DeluxeAuctions.getInstance(), task -> runnable.run(), delayTicks, periodTicks);
+            DeluxeAuctions.getInstance().getServer().getAsyncScheduler().runAtFixedRate(DeluxeAuctions.getInstance(), scheduledTask -> runnable.run(), delayTicks * 50, periodTicks * 50, java.util.concurrent.TimeUnit.MILLISECONDS);
         } else {
             new BukkitRunnable() {
                 @Override
@@ -85,7 +85,7 @@ public final class TaskUtils {
 
     public static void runTimerAsync(Player player, String id, Runnable runnable, long delayTicks, long periodTicks) {
         if (isFolia) {
-            DeluxeAuctions.getInstance().getServer().getGlobalRegionScheduler().runAtFixedRate(DeluxeAuctions.getInstance(), task -> {
+            DeluxeAuctions.getInstance().getServer().getAsyncScheduler().runAtFixedRate(DeluxeAuctions.getInstance(), task -> {
                 HInventory inventory = InventoryAPI.getInventory(player);
                 if (inventory == null) {
                     cancelTask(task);
@@ -104,7 +104,7 @@ public final class TaskUtils {
                 }
 
                 runnable.run();
-            }, delayTicks, periodTicks);
+            }, delayTicks * 50, periodTicks * 50, java.util.concurrent.TimeUnit.MILLISECONDS);
         } else {
             new BukkitRunnable() {
                 @Override

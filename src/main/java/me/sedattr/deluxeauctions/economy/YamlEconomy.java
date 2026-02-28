@@ -11,6 +11,7 @@ public class YamlEconomy implements EconomyManager {
     private final String folder;
     private final String file;
     private final String node;
+    private final Object lock = new Object();
 
     public YamlEconomy(String folder, String file, String node) {
         this.folder = folder;
@@ -32,41 +33,49 @@ public class YamlEconomy implements EconomyManager {
     }
 
     public boolean addBalance(OfflinePlayer player, Double count) {
-        File file = new File(replace(player, this.folder), replace(player, this.file));
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-        Double oldCount = config.getDouble(replace(player, this.node));
+        synchronized (lock) {
+            File file = new File(replace(player, this.folder), replace(player, this.file));
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+            Double oldCount = config.getDouble(replace(player, this.node));
 
-        config.set(replace(player, this.node), oldCount + count);
-        try {
-            config.save(file);
-            return true;
-        } catch (IOException e) {
-            return false;
+            config.set(replace(player, this.node), oldCount + count);
+            try {
+                config.save(file);
+                return true;
+            } catch (IOException e) {
+                return false;
+            }
         }
     }
 
     @Override
     public boolean removeBalance(OfflinePlayer player, Double count) {
-        File file = new File(replace(player, this.folder),
-                replace(player, this.file));
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-        Double oldCount = config.getDouble(replace(player, this.node));
+        synchronized (lock) {
+            File file = new File(replace(player, this.folder),
+                    replace(player, this.file));
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+            Double oldCount = config.getDouble(replace(player, this.node));
 
-        config.set(replace(player, this.node), oldCount - count);
-        try {
-            config.save(file);
-            return true;
-        } catch (IOException e) {
-            return false;
+            if (oldCount < count) return false;
+
+            config.set(replace(player, this.node), oldCount - count);
+            try {
+                config.save(file);
+                return true;
+            } catch (IOException e) {
+                return false;
+            }
         }
     }
 
     @Override
     public double getBalance(OfflinePlayer player) {
-        File file = new File(replace(player, this.folder),
-                replace(player, this.file));
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        synchronized (lock) {
+            File file = new File(replace(player, this.folder),
+                    replace(player, this.file));
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
 
-        return config.getDouble(replace(player, this.node));
+            return config.getDouble(replace(player, this.node));
+        }
     }
 }

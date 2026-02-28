@@ -20,11 +20,11 @@ public class InventoryAPI {
     }
 
     public static HInventory getInventory(Player player) {
-        return InventoryVariables.getPlayerInventory().get(player);
+        return InventoryVariables.getPlayerInventory().get(player.getUniqueId());
     }
 
     public static boolean hasInventory(Player player) {
-        return InventoryVariables.getPlayerInventory().containsKey(player);
+        return InventoryVariables.getPlayerInventory().containsKey(player.getUniqueId());
     }
 
     public static InventoryManager getInventoryManager() {

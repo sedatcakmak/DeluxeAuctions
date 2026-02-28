@@ -13,9 +13,10 @@ import org.bukkit.plugin.messaging.PluginMessageListener;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class BungeeAddon implements MultiServerManager, PluginMessageListener {
-    private final HashMap<String, Set<String>> updatedAuctions = new HashMap<>();
+    private final Map<String, Set<String>> updatedAuctions = new ConcurrentHashMap<>();
     private final String channel = "my:deluxeauctions";
 
     public BungeeAddon() {

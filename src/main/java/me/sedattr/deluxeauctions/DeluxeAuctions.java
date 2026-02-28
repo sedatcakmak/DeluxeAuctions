@@ -149,8 +149,10 @@ public class DeluxeAuctions extends JavaPlugin {
     public void onDisable() {
         this.disabled = true;
 
-        if (this.loaded)
+        if (this.loaded) {
+            DeluxeAuctions.getInstance().databaseManager.saveAuctions();
             DeluxeAuctions.getInstance().databaseManager.shutdown();
+        }
         this.metrics.shutdown();
 
         for (Player player : Bukkit.getOnlinePlayers())

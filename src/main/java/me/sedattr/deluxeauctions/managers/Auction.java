@@ -16,6 +16,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.time.ZonedDateTime;
+import java.util.HashMap;
 import java.util.UUID;
 
 @Getter
@@ -128,7 +129,7 @@ public class Auction {
         return ZonedDateTime.now().toInstant().getEpochSecond() > this.auctionEndTime;
     }
 
-    public boolean cancel(Player player) {
+    public synchronized boolean cancel(Player player) {
         // Check if auction is already deleted
         if (AuctionCache.getAuction(this.auctionUUID) == null)
             return false;
@@ -205,7 +206,7 @@ public class Auction {
         return true;
     }
 
-    public boolean placeBid(Player player, double price) {
+    public synchronized boolean placeBid(Player player, double price) {
         if (AuctionCache.getAuction(this.auctionUUID) == null) {
             DeluxeAuctions.getInstance().dataHandler.debug("Auction (" + this.auctionUUID + ") is not found in the auction list, it can't be sold again!");
             return false;
@@ -300,14 +301,17 @@ public class Auction {
         DeluxeAuctions.getInstance().dataHandler.writeToLog("[PLAYER BID AUCTION] " + player.getName() + " (" + player.getUniqueId() + ") bid " + price + " COINS for " + Bukkit.getOfflinePlayer(this.auctionOwner).getName() + "'s " + Utils.getDisplayName(this.auctionItem) + " (" + this.auctionUUID + ")!");
 
         // Balance
-        this.economy.getManager().removeBalance(player, price);
+        if (!this.economy.getManager().removeBalance(player, price)) {
+            AuctionCache.removeUpdatingAuction(this.auctionUUID);
+            return false;
+        }
 
-        // Highest Bid
+        // Highest Bid - mark as collected BEFORE refunding to prevent double refund
         PlayerBid highestBid = this.auctionBids.getHighestBid();
-        if (highestBid != null) {
+        if (highestBid != null && !highestBid.isCollected()) {
+            highestBid.setCollected(true);
             OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(highestBid.getBidOwner());
             this.economy.getManager().addBalance(offlinePlayer, highestBid.getBidPrice());
-            highestBid.setCollected(true);
         }
 
         // Stats
@@ -326,7 +330,7 @@ public class Auction {
         return true;
     }
 
-    public boolean purchase(Player player) {
+    public synchronized boolean purchase(Player player) {
         if (AuctionCache.getAuction(this.auctionUUID) == null) {
             DeluxeAuctions.getInstance().dataHandler.debug("Auction (" + this.auctionUUID + ") is not found in the auction list, it can't be sold again!");
             return false;
@@ -415,9 +419,27 @@ public class Auction {
         DeluxeAuctions.getInstance().dataHandler.debug("Player (" + player.getUniqueId() + ") is purchased auction (" + this.auctionUUID + ")!");
         AuctionCache.addUpdatingAuction(this.auctionUUID);
 
-        // Player
-        this.economy.getManager().removeBalance(player, this.auctionPrice);
-        player.getInventory().addItem(this.auctionItem.clone());
+        // Re-check balance right before deduction to minimize race window
+        if (this.economy.getManager().getBalance(player) < this.auctionPrice) {
+            AuctionCache.removeUpdatingAuction(this.auctionUUID);
+            Utils.sendMessage(player, "not_enough_money", new PlaceholderUtil().addPlaceholder("%required_money%", DeluxeAuctions.getInstance().numberFormat.format(this.auctionPrice)));
+            return false;
+        }
+
+        // Deduct balance first
+        if (!this.economy.getManager().removeBalance(player, this.auctionPrice)) {
+            AuctionCache.removeUpdatingAuction(this.auctionUUID);
+            return false;
+        }
+
+        // Give item -- rollback balance if inventory is full
+        HashMap<Integer, ItemStack> leftover = player.getInventory().addItem(this.auctionItem.clone());
+        if (!leftover.isEmpty()) {
+            this.economy.getManager().addBalance(player, this.auctionPrice);
+            AuctionCache.removeUpdatingAuction(this.auctionUUID);
+            Utils.sendMessage(player, "no_empty_slot");
+            return false;
+        }
 
         // Log
         DeluxeAuctions.getInstance().dataHandler.writeToLog("[PLAYER BOUGHT AUCTION] " + player.getName() + " (" + player.getUniqueId() + ") bought " + Utils.getDisplayName(this.auctionItem) + " (" + this.auctionUUID + ") for " + this.auctionPrice + " COINS from " + Bukkit.getOfflinePlayer(this.auctionOwner).getName() + "!");
@@ -438,7 +460,7 @@ public class Auction {
         return true;
     }
 
-    public String sellerCollect(Player player, boolean isAll) {
+    public synchronized String sellerCollect(Player player, boolean isAll) {
         if (AuctionCache.getAuction(this.auctionUUID) == null)
             return "";
 
@@ -530,7 +552,7 @@ public class Auction {
         return type;
     }
 
-    public String buyerCollect(Player player, boolean isAll) {
+    public synchronized String buyerCollect(Player player, boolean isAll) {
         if (AuctionCache.getAuction(this.auctionUUID) == null)
             return "";
 

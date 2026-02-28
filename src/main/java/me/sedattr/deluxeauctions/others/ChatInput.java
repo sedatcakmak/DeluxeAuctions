@@ -11,7 +11,7 @@ import org.bukkit.event.player.AsyncPlayerChatEvent;
 public class ChatInput {
     private final Player player;
     private final ChatListener listener;
-    private boolean listening;
+    private volatile boolean listening;
     private ChatHandler handler;
 
     public ChatInput(Player player, ChatHandler handler) {

@@ -5,12 +5,13 @@ import me.sedattr.deluxeauctions.managers.PlayerPreferences;
 import me.sedattr.deluxeauctions.managers.PlayerStats;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class PlayerCache {
-    @Getter private static final HashMap<UUID, PlayerStats> stats = new HashMap<>();
-    @Getter private static final HashMap<UUID, PlayerPreferences> players = new HashMap<>();
+    @Getter private static final Map<UUID, PlayerStats> stats = new ConcurrentHashMap<>();
+    @Getter private static final Map<UUID, PlayerPreferences> players = new ConcurrentHashMap<>();
 
     public static PlayerStats getStats(UUID player) {
         PlayerStats playerStats = stats.get(player);
@@ -23,7 +24,7 @@ public class PlayerCache {
         return playerStats;
     }
 
-    @Getter private static final HashMap<UUID, ItemStack> items = new HashMap<>();
+    @Getter private static final Map<UUID, ItemStack> items = new ConcurrentHashMap<>();
     public static ItemStack getItem(UUID player) {
         return items.getOrDefault(player, null);
     }

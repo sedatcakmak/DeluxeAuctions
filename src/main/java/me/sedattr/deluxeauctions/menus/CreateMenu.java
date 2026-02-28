@@ -272,7 +272,7 @@ public class CreateMenu implements MenuManager {
             }
         }
 
-        if (number <= 0)
+        if (number <= 0 || !Double.isFinite(number))
             Utils.sendMessage(this.player, "wrong_price");
         else {
             double limit = AuctionHook.getPriceLimit(player, "price_limit");

@@ -1,6 +1,5 @@
 package me.sedattr.auctionsapi.cache;
 
-import com.google.common.collect.Maps;
 import lombok.Getter;
 import me.sedattr.deluxeauctions.DeluxeAuctions;
 import me.sedattr.deluxeauctions.managers.*;
@@ -13,9 +12,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class AuctionCache {
-    @Getter private static final HashMap<UUID, Auction> auctions = Maps.newHashMap();
-    private static final Set<UUID> updatedAuctions = new HashSet<>();
-    private static final HashMap<UUID, Auction> endedAuctions = Maps.newHashMap();
+    @Getter private static final ConcurrentHashMap<UUID, Auction> auctions = new ConcurrentHashMap<>();
+    private static final Set<UUID> updatedAuctions = ConcurrentHashMap.newKeySet();
+    private static final ConcurrentHashMap<UUID, Auction> endedAuctions = new ConcurrentHashMap<>();
 
     public static boolean isAuctionUpdating(UUID auctionUUID) {
         return updatedAuctions.contains(auctionUUID);

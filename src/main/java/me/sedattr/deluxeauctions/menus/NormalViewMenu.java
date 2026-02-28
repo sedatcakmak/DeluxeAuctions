@@ -406,7 +406,7 @@ public class NormalViewMenu implements MenuManager {
         }
 
         double price = calculateBidAmount();
-        if (number < price) {
+        if (!Double.isFinite(number) || number < price) {
             open(this.back);
             return;
         }

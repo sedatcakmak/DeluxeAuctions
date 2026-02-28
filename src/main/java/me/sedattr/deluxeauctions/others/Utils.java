@@ -27,6 +27,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Utils {
+    private static String sanitizeForCommand(String input) {
+        if (input == null) return "";
+        return input.replaceAll("[;&|`$(){}\\[\\]!#]", "")
+                    .replaceAll("\\s+", " ")
+                    .trim();
+    }
+
     public static boolean hasPermission(CommandSender player, String... strings) {
         if (player.isOp())
             return true;
@@ -159,15 +166,31 @@ public class Utils {
             if (data == null || data.isEmpty())
                 return null;
 
-            ByteArrayInputStream inputStream = new ByteArrayInputStream(Base64Coder.decodeLines(data));
+            // Pre-check: Base64 encoded string length * 3/4 gives approximate decoded size
+            if (data.length() > 1_398_102) { // ~1MB after Base64 decode
+                Logger.sendConsoleMessage("SECURITY: Base64 input too large! (" + data.length() + " chars)", Logger.LogLevel.WARN);
+                return null;
+            }
+
+            byte[] decoded = Base64Coder.decodeLines(data);
+            if (decoded.length > 1_048_576) { // 1MB limit -- DoS prevention
+                Logger.sendConsoleMessage("SECURITY: Base64 size limit exceeded! (" + decoded.length + " bytes)", Logger.LogLevel.WARN);
+                return null;
+            }
+
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(decoded);
             BukkitObjectInputStream dataInput = new BukkitObjectInputStream(inputStream);
             Object object = dataInput.readObject();
-            if (!(object instanceof ItemStack))
+            dataInput.close();
+
+            if (!(object instanceof ItemStack item))
+                return null;
+            if (item.getType() == null || item.getType() == Material.AIR)
                 return null;
 
-            dataInput.close();
-            return (ItemStack) object;
+            return item;
         } catch (Exception e) {
+            Logger.sendConsoleMessage("Base64 deserialization error: " + e.getMessage(), Logger.LogLevel.WARN);
             return null;
         }
     }
@@ -277,8 +300,8 @@ public class Utils {
 
             for (String command : section.getStringList("commands")) {
                 String parsed = command
-                        .replace("%player_displayname%", player.getDisplayName())
-                        .replace("%player_name%", player.getName())
+                        .replace("%player_displayname%", sanitizeForCommand(player.getDisplayName()))
+                        .replace("%player_name%", sanitizeForCommand(player.getName()))
                         .replace("%player_uuid%", String.valueOf(player.getUniqueId()));
 
                 TaskUtils.run(() -> {
