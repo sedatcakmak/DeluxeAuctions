@@ -20,8 +20,10 @@ public class RoyaleEconomyBank implements EconomyManager {
 
     @Override
     public boolean removeBalance(OfflinePlayer player, Double count) {
-        this.api.removeBankBalance(player.getUniqueId().toString(), count);
+        if (getBalance(player) < count)
+            return false;
 
+        this.api.removeBankBalance(player.getUniqueId().toString(), count);
         return true;
     }
 

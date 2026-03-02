@@ -26,6 +26,9 @@ public class SkriptEconomy implements EconomyManager {
         if (player == null || count == null || count < 0)
             return false;
 
+        if (getBalance(player) < count)
+            return false;
+
         double newBalance = getBalance(player) - count;
         setBalance(player, newBalance);
 

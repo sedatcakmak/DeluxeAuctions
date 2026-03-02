@@ -21,6 +21,9 @@ public class EdPrisonEconomy implements EconomyManager {
 
     @Override
     public boolean removeBalance(OfflinePlayer player, Double count) {
+        if (getBalance(player) < count)
+            return false;
+
         this.economyAPI.removeEco(player.getUniqueId(), this.economy, count);
         return true;
     }

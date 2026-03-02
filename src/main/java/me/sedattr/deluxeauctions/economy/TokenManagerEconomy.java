@@ -22,6 +22,9 @@ public class TokenManagerEconomy implements EconomyManager {
 
     @Override
     public boolean removeBalance(OfflinePlayer player, Double count) {
+        if (getBalance(player) < count)
+            return false;
+
         this.api.removeTokens(player.getUniqueId().toString(), Long.parseLong(String.valueOf(count)));
         return true;
     }

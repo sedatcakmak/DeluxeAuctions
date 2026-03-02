@@ -20,6 +20,9 @@ public class XPEconomy implements EconomyManager {
         if (online == null || !online.isOnline())
             return false;
 
+        if (getBalance(player) < count)
+            return false;
+
         online.setLevel(online.getLevel()-count.intValue());
         return true;
     }

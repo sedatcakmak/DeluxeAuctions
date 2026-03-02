@@ -37,6 +37,7 @@ public class LandsEconomy implements EconomyManager {
             return false;
 
         double balance = land.getBalance();
+        if (balance < count) return false;
         return land.setBalance(balance - count);
     }
 

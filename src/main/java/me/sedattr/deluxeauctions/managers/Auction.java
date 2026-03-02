@@ -97,7 +97,8 @@ public class Auction {
         if (!status)
             return false;
 
-        this.economy.getManager().removeBalance(player, totalFee);
+        if (!this.economy.getManager().removeBalance(player, totalFee))
+            return false;
 
         playerPreferences.setCreateEconomy(DeluxeAuctions.getInstance().createEconomy);
         playerPreferences.setCreatePrice(DeluxeAuctions.getInstance().createPrice);
@@ -311,7 +312,9 @@ public class Auction {
         if (highestBid != null && !highestBid.isCollected()) {
             highestBid.setCollected(true);
             OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(highestBid.getBidOwner());
-            this.economy.getManager().addBalance(offlinePlayer, highestBid.getBidPrice());
+            if (!this.economy.getManager().addBalance(offlinePlayer, highestBid.getBidPrice())) {
+                highestBid.setCollected(false);
+            }
         }
 
         // Stats
@@ -532,7 +535,11 @@ public class Auction {
             stats.addExpiredAuction();
         } else {
             DeluxeAuctions.getInstance().dataHandler.writeToLog("[SELLER COLLECTED AUCTION] " + player.getName() + " (" + player.getUniqueId() + ") collected " + highestBid.getBidPrice() + " COINS from " + Utils.getDisplayName(this.auctionItem) + " (" + this.auctionUUID + ") auction!");
-            this.economy.getManager().addBalance(player, highestBid.getBidPrice());
+            if (!this.economy.getManager().addBalance(player, highestBid.getBidPrice())) {
+                this.sellerClaimed = false;
+                AuctionCache.removeUpdatingAuction(this.auctionUUID);
+                return "";
+            }
             type = "money";
 
             stats.addSoldAuction();
@@ -636,8 +643,13 @@ public class Auction {
             type = "money";
             DeluxeAuctions.getInstance().dataHandler.writeToLog("[BUYER COLLECTED AUCTION] " + player.getName() + " (" + player.getUniqueId() + ") collected from " + Utils.getDisplayName(this.auctionItem) + " (" + this.auctionUUID + ") auction!");
 
-            if (!isClaimed)
-                this.economy.getManager().addBalance(player, playerBid.getBidPrice());
+            if (!isClaimed) {
+                if (!this.economy.getManager().addBalance(player, playerBid.getBidPrice())) {
+                    playerBid.setCollected(false);
+                    AuctionCache.removeUpdatingAuction(this.auctionUUID);
+                    return "";
+                }
+            }
 
             stats.addLostAuction();
         }
