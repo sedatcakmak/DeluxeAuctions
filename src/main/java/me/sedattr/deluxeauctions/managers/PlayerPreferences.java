@@ -53,16 +53,19 @@ public class PlayerPreferences {
             PlayerCache.setItem(this.player, null);
 
             if (oldItem != null) {
-                int empty = player.getInventory().firstEmpty();
-                if (empty < 0) {
+                ItemStack[] backup = new ItemStack[36];
+                for (int i = 0; i < 36; i++) {
+                    ItemStack item = player.getInventory().getItem(i);
+                    backup[i] = item != null ? item.clone() : null;
+                }
+                HashMap<Integer, ItemStack> leftover = player.getInventory().addItem(oldItem);
+                if (!leftover.isEmpty()) {
+                    for (int i = 0; i < 36; i++) player.getInventory().setItem(i, backup[i]);
                     Utils.sendMessage(player, "no_empty_slot");
-
                     PlayerCache.setItem(this.player, oldItem);
                     TaskUtils.runLater(() -> this.clicked.set(false), 1);
                     return false;
                 }
-
-                player.getInventory().setItem(empty, oldItem);
                 DeluxeAuctions.getInstance().databaseManager.saveItem(this.player, null);
             }
         }
