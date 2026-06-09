@@ -117,6 +117,13 @@ input_lines:
   anvil:
     text: "&eEnter Text"
     number: "&eWrite Number"
+  dialog:
+    text:
+      title: "&eEnter Text"
+      button: "&aConfirm"
+    number:
+      title: "&eWrite Number"
+      button: "&aConfirm"
   sign:
     text:
       - ""

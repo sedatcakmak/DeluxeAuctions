@@ -23,7 +23,7 @@ settings:
   enable_debug: true # Useful for debugging database and some systems.
   enable_log: true # Internal logging system, useful for finding exploits and bugs
   enable_main_menu: true
-  input_type: "sign" # Default input, types: sign, anvil or chat
+  input_type: "auto" # Input mode. "auto" picks best per client: Geyser->chat, client <1.21.6->sign, 1.21.6+->dialog. Manual override: sign, anvil, chat, dialog
   # Uncategorized items will be found in this category
   # All items can be sold with this setting
   return_category:
