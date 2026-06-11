@@ -69,7 +69,7 @@ public class DeluxeAuctions extends JavaPlugin {
     public DiscordWebhook discordWebhook;
 
     public String returnCategory = "";
-    public double fileVersions = 1.1;
+    public double fileVersions = 1.4;
     public int version;
     public boolean locked = false;
     public boolean loaded = false;

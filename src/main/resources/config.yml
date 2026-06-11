@@ -380,5 +380,47 @@ sounds:
     volume: 1
     pitch: 0.6
 
+# RESOURCE PACK MENU TITLES
+# If the player has the server resource pack loaded (hasResourcePack), the menu title
+# is replaced with the "to-name" value. Useful for custom font/texture based GUIs.
+# If "to-name" is empty, the default title from menus.yml is used.
+# PlaceholderAPI placeholders are supported in "to-name" values.
+# Menus from menus.yml that are missing here are added automatically on startup.
+pack-check:
+  enabled: false
+  guis:
+    main_menu:
+      to-name: ""
+    auctions_menu:
+      to-name: ""
+    bin_auction_view_menu:
+      to-name: ""
+    normal_auction_view_menu:
+      to-name: ""
+    normal_auction_create_menu:
+      to-name: ""
+    bin_auction_create_menu:
+      to-name: ""
+    confirm_auction:
+      to-name: ""
+    confirm_purchase:
+      to-name: ""
+    confirm_bid:
+      to-name: ""
+    manage_auctions:
+      to-name: ""
+    view_bids:
+      to-name: ""
+    economy_menu:
+      to-name: ""
+    duration_menu:
+      to-name: ""
+    view_player_auctions:
+      to-name: ""
+    shulker_view_menu:
+      to-name: ""
+    stats_menu:
+      to-name: ""
+
 # DON'T CHANGE THIS MANUALLY
-file_versions: 1.3
+file_versions: 1.4

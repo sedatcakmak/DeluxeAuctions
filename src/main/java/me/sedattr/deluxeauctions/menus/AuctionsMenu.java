@@ -4,7 +4,6 @@ import me.sedattr.auctionsapi.AuctionHook;
 import me.sedattr.auctionsapi.cache.AuctionCache;
 import me.sedattr.auctionsapi.cache.CategoryCache;
 import me.sedattr.auctionsapi.cache.PlayerCache;
-import me.sedattr.deluxeauctions.inventoryapi.inventory.InventoryAPI;
 import me.sedattr.deluxeauctions.inventoryapi.HInventory;
 import me.sedattr.deluxeauctions.inventoryapi.item.ClickableItem;
 import me.sedattr.deluxeauctions.DeluxeAuctions;
@@ -33,7 +32,7 @@ public class AuctionsMenu implements MenuManager {
 
     private int totalPage;
 
-    private boolean itemUpdater = false;
+    private int updaterEpoch = 0;
     private List<Integer> slots;
 
     public AuctionsMenu(Player player) {
@@ -43,7 +42,7 @@ public class AuctionsMenu implements MenuManager {
     }
 
     public void open(String categoryName, int page) {
-        this.itemUpdater = false;
+        this.updaterEpoch++;
         page = Math.max(page, 1);
 
         if (!categoryName.equalsIgnoreCase("search")) {
@@ -85,13 +84,11 @@ public class AuctionsMenu implements MenuManager {
                             AuctionHook.openMainMenu(this.player)));
             }
 
+            loadItems();
+
             TaskUtils.run(() -> {
                 this.gui.open(this.player);
-
-                TaskUtils.runAsync(() -> {
-                    loadItems();
-                    updateItems();
-                });
+                updateItems();
             });
         });
     }
@@ -539,11 +536,14 @@ public class AuctionsMenu implements MenuManager {
     }
 
     private void updateItems() {
-        if (this.itemUpdater)
-            return;
+        // epoch invalidates timers from previous open() calls, otherwise they stack up on every page switch
+        int epoch = this.updaterEpoch;
+        Runnable runnable = () -> {
+            if (epoch != this.updaterEpoch)
+                return;
 
-        this.itemUpdater = true;
-        Runnable runnable = this::loadItems;
+            loadItems();
+        };
         TaskUtils.runTimerAsync(this.player, "auctions", runnable, 20, 20);
     }
 
@@ -551,25 +551,26 @@ public class AuctionsMenu implements MenuManager {
         if (this.slots.isEmpty())
             return;
 
-        if (!InventoryAPI.hasInventory(this.player))
+        HInventory gui = this.gui;
+        if (gui == null)
             return;
-        if (this.gui == null)
-            return;
+
+        List<Auction> auctions = this.currentAuctions;
 
         int i = 0;
         for (int slot : this.slots) {
             if (slot <= 0)
                 continue;
 
-            if (i >= this.currentAuctions.size()) {
-                this.gui.setItem(slot, null);
+            if (i >= auctions.size()) {
+                gui.setItem(slot, null);
                 continue;
             }
 
-            Auction auction = this.currentAuctions.get(i);
+            Auction auction = auctions.get(i);
             ItemStack itemStack = AuctionHook.getUpdatedAuctionItem(auction);
 
-            this.gui.setItem(slot, ClickableItem.of(itemStack, (event) -> {
+            gui.setItem(slot, ClickableItem.of(itemStack, (event) -> {
                 Utils.playSound(this.player, "auction_item_click");
 
                 if (auction.getAuctionType().equals(AuctionType.BIN))

@@ -5,19 +5,90 @@ import me.sedattr.deluxeauctions.inventoryapi.HInventory;
 import me.sedattr.deluxeauctions.inventoryapi.item.ClickableItem;
 import me.sedattr.deluxeauctions.DeluxeAuctions;
 import me.sedattr.deluxeauctions.managers.Category;
+import me.sedattr.deluxeauctions.others.Logger;
 import me.sedattr.deluxeauctions.others.PlaceholderUtil;
 import me.sedattr.deluxeauctions.others.Utils;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 public class MenuHandler {
+    private final boolean packCheckEnabled;
+    private final boolean packCheckSupported;
+    private final Map<String, String> packTitles = new HashMap<>();
+
+    public MenuHandler() {
+        FileConfiguration config = DeluxeAuctions.getInstance().configFile;
+        this.packCheckEnabled = config.getBoolean("pack-check.enabled", false);
+
+        // Player#hasResourcePack is not available on all server versions
+        boolean supported = false;
+        try {
+            Player.class.getMethod("hasResourcePack");
+            supported = true;
+        } catch (NoSuchMethodException ignored) {}
+        this.packCheckSupported = supported;
+
+        if (this.packCheckEnabled && !this.packCheckSupported)
+            Logger.sendConsoleMessage("Pack check is enabled but this server version doesn't support hasResourcePack! Setting is ignored.", Logger.LogLevel.WARN);
+
+        loadPackTitles(config);
+    }
+
+    private void loadPackTitles(FileConfiguration config) {
+        YamlConfiguration menus = DeluxeAuctions.getInstance().menusFile;
+        if (menus == null)
+            return;
+
+        boolean changed = false;
+        for (String key : menus.getKeys(false)) {
+            ConfigurationSection menuSection = menus.getConfigurationSection(key);
+            if (menuSection == null || !menuSection.isString("title"))
+                continue;
+
+            String path = "pack-check.guis." + key + ".to-name";
+            if (!config.isSet(path)) {
+                config.set(path, "");
+                changed = true;
+            }
+
+            String toName = config.getString(path, "");
+            if (toName != null && !toName.isEmpty())
+                this.packTitles.put(key, toName);
+        }
+
+        if (!changed)
+            return;
+
+        // Saving without comment support (pre 1.18.1) would strip all config comments
+        try {
+            ConfigurationSection.class.getMethod("getComments", String.class);
+            DeluxeAuctions.getInstance().saveConfig();
+        } catch (NoSuchMethodException ignored) {}
+    }
+
+    public String getPackTitle(Player player, String menuName, String title) {
+        if (!this.packCheckEnabled || !this.packCheckSupported || this.packTitles.isEmpty())
+            return title;
+        if (player == null || !player.hasResourcePack())
+            return title;
+
+        String toName = this.packTitles.get(menuName);
+        if (toName == null || toName.isEmpty())
+            return title;
+
+        return Utils.placeholderApi(player, toName);
+    }
+
     public void addCustomItems(Player player, HInventory gui, ConfigurationSection section) {
         if (section == null)
             return;
@@ -118,6 +189,8 @@ public class MenuHandler {
             title = DeluxeAuctions.getInstance().menusFile.getString("auctions_menu.search.title");
         if (title == null)
             title = "&cTitle is missing in config!";
+
+        title = getPackTitle(player, section.getName(), title);
 
         if (placeholderUtil != null) {
             Map<String, String> placeholders = placeholderUtil.getPlaceholders();
