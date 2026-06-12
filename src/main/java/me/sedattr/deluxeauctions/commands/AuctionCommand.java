@@ -294,7 +294,8 @@ public class AuctionCommand implements CommandExecutor, TabCompleter {
                     }
                 }
 
-                if (price <= 0) {
+                // NaN bypasses <= and > comparisons, so it must be rejected explicitly
+                if (price <= 0 || !Double.isFinite(price)) {
                     Utils.sendMessage(player, "wrong_price", placeholderUtil);
                     return false;
                 }

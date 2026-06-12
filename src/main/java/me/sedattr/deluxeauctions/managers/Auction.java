@@ -63,6 +63,12 @@ public class Auction {
     }
 
     public boolean create(Player player, double totalFee) {
+        // NaN/Infinity bypasses comparison-based checks, so reject it before the auction is saved
+        if (!Double.isFinite(this.auctionPrice) || this.auctionPrice <= 0 || !Double.isFinite(totalFee)) {
+            Utils.sendMessage(player, "wrong_price");
+            return false;
+        }
+
         ItemStack item = PlayerCache.getItem(player.getUniqueId());
         if (item == null || item.getType().equals(Material.AIR)) {
             Utils.sendMessage(player, "item_not_found");
@@ -249,10 +255,10 @@ public class Auction {
             return false;
         }
 
-        // Check if bid is low
+        // Check if bid is low (NaN bypasses <= comparisons, so it must be rejected explicitly)
         AuctionBids bids = this.getAuctionBids();
         double bidPrice = bids.getHighestBid() == null ? this.auctionPrice : bids.getHighestBid().getBidPrice();
-        if (price <= bidPrice) {
+        if (!Double.isFinite(price) || !Double.isFinite(bidPrice) || price <= bidPrice) {
             DeluxeAuctions.getInstance().dataHandler.debug("Player (" + player.getUniqueId() + ") is trying to bid low to auction (" + this.auctionUUID + ")!");
             Utils.sendMessage(player, "low_bid");
             return false;
