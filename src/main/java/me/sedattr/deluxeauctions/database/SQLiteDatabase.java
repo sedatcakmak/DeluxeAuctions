@@ -500,8 +500,23 @@ public class SQLiteDatabase implements DatabaseManager {
             TaskUtils.runAsync(task);
     }
 
+    private int shutdownRetries = 0;
+
     private void handleSQLException(SQLException x, Runnable retryTask) {
         if (DeluxeAuctions.getInstance().disabled) {
+            // Sync retry during shutdown, but bounded - an unreachable database
+            // would otherwise recurse until StackOverflowError
+            if (this.shutdownRetries >= 3) {
+                x.printStackTrace();
+                return;
+            }
+
+            this.shutdownRetries++;
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
             retryTask.run();
             return;
         }
