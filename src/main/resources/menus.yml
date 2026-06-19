@@ -1003,11 +1003,19 @@ manage_auctions:
       data: 0
       slot: 42
       name: "&aClaim All"
+      # Claimable money placeholders:
+      #   %claimable_money%               -> total across ALL economies
+      #   %claimable_money_<economyKey>%  -> only that economy (key from economy.yml)
+      # Each line auto-hides when its amount is 0, so you can add one line per
+      # currency. Example for the default vault + a custom "pr_economy":
       lore:
         - "&7You can claim your ended auctions."
         - ""
         - "&7You have &a%claimable_items% items &7to claim."
         - "&7You have &6%claimable_money% money &7to claim."
+        # Per-currency lines (uncomment & match your economy.yml keys):
+        # - "&7You have &6%claimable_money_vault_economy% money &7to claim."
+        # - "&7You have &b%claimable_money_pr_economy% Premium Ripple &7to claim."
         - ""
         - "&eClick to claim all!"
   create:

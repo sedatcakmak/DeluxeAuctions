@@ -84,7 +84,7 @@ public class CreateMenu implements MenuManager {
             return;
 
         PlaceholderUtil placeholderUtil = new PlaceholderUtil()
-                .addPlaceholder("%time_fee%", this.playerAuction.getCreateEconomy().getText().replace("%price%", DeluxeAuctions.getInstance().numberFormat.format(AuctionHook.calculateDurationFee(this.playerAuction.getCreateTime(), this.playerAuction.getCreateEconomy()))))
+                .addPlaceholder("%time_fee%", this.playerAuction.getCreateEconomy().getText().replace("%price%", DeluxeAuctions.getInstance().numberFormat.format(AuctionHook.calculateDurationFee(this.playerAuction.getCreateTime(), this.playerAuction.getCreateEconomy(), this.playerAuction.getCreatePrice()))))
                 .addPlaceholder("%auction_time%", DeluxeAuctions.getInstance().timeFormat.formatTime(this.playerAuction.getCreateTime(), "other_times"));
 
         ItemStack itemStack = Utils.createItemFromSection(itemSection, placeholderUtil);
@@ -137,7 +137,7 @@ public class CreateMenu implements MenuManager {
         if (priceFeePercent > 0.0)
             totalFee.addAndGet(this.playerAuction.getCreatePrice()/100*priceFeePercent);
 
-        double durationFee = AuctionHook.calculateDurationFee(this.playerAuction.getCreateTime(), this.playerAuction.getCreateEconomy());
+        double durationFee = AuctionHook.calculateDurationFee(this.playerAuction.getCreateTime(), this.playerAuction.getCreateEconomy(), this.playerAuction.getCreatePrice());
         if (durationFee > 0.0)
             totalFee.addAndGet(durationFee);
 

@@ -102,10 +102,14 @@ public class AuctionHook {
     }
 
     public static double calculateDurationFee(long time) {
-        return calculateDurationFee(time, null);
+        return calculateDurationFee(time, null, -1.0);
     }
 
     public static double calculateDurationFee(long time, Economy economy) {
+        return calculateDurationFee(time, economy, -1.0);
+    }
+
+    public static double calculateDurationFee(long time, Economy economy, double price) {
         ConfigurationSection durationSection = DeluxeAuctions.getInstance().configFile.getConfigurationSection("settings.duration_fee");
         if (durationSection == null)
             return 0.0;
@@ -116,6 +120,7 @@ public class AuctionHook {
 
         String formula = durationSection.getString("formula", "%hours% * 50");
         double minimumFee = durationSection.getDouble("minimum_fee", 0.0);
+        double maxPricePercent = durationSection.getDouble("max_price_percent", 0.0);
 
         // Per-economy duration fee override: settings.duration_fee.economy_formulas.<economyKey>
         // Value may be a formula String, or a section with its own formula + minimum_fee.
@@ -125,6 +130,7 @@ public class AuctionHook {
                 ConfigurationSection ecoSection = DeluxeAuctions.getInstance().configFile.getConfigurationSection(base);
                 formula = ecoSection.getString("formula", formula);
                 minimumFee = ecoSection.getDouble("minimum_fee", minimumFee);
+                maxPricePercent = ecoSection.getDouble("max_price_percent", maxPricePercent);
             } else if (DeluxeAuctions.getInstance().configFile.isString(base)) {
                 formula = DeluxeAuctions.getInstance().configFile.getString(base, formula);
             }
@@ -137,9 +143,13 @@ public class AuctionHook {
                 .replace("%minutes%", String.valueOf(time/60))
                 .replace("%hours%", String.valueOf(time/3600)))
                 .build();
-        double formulaPrice = e.evaluate();
+        double fee = Math.max(e.evaluate(), minimumFee);
 
-        return Math.max(formulaPrice, minimumFee);
+        // Cap the duration (listing) fee at a percentage of the auction price.
+        if (maxPricePercent > 0.0 && price > 0.0)
+            fee = Math.min(fee, price / 100.0 * maxPricePercent);
+
+        return fee;
     }
 
     public static double getPriceLimit(Player player, String type) {

@@ -41,8 +41,8 @@ public class EconomyMenu {
     }
 
     private void loadEconomyItems() {
-        String unselectedText = Utils.colorize(this.section.getString("unselected_text", "&eSeçmek için tıklayın!"));
-        String selectedText = Utils.colorize(this.section.getString("selected_text", "&bŞu an seçili!"));
+        String unselectedText = Utils.colorize(this.section.getString("unselected_text", "&eClick to select!"));
+        String selectedText = Utils.colorize(this.section.getString("selected_text", "&bCurrently selected!"));
 
         for (Economy economy : DeluxeAuctions.getInstance().economies.values()) {
             if (!economy.isEnabled())

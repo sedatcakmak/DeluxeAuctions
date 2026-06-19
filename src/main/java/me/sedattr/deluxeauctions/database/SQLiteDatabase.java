@@ -187,7 +187,7 @@ public class SQLiteDatabase implements DatabaseManager {
 
             boolean columnExists = false;
             while (resultSet.next()) {
-                String columnName = resultSet.getString("name"); // SQLite'de sütun adı "name" olarak geçiyor
+                String columnName = resultSet.getString("name"); // In SQLite the column name is "name"
                 if ("economy".equalsIgnoreCase(columnName)) {
                     columnExists = true;
                     break;

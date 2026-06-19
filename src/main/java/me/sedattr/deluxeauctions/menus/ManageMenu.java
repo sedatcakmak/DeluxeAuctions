@@ -153,20 +153,25 @@ public class ManageMenu {
         if (itemSection == null)
             return;
 
-        double money = 0;
+        Map<String, Double> moneyByEconomy = new HashMap<>();
+        double totalMoney = 0;
         int item = 0;
         for (Auction auction : this.auctions) {
             if (!auction.isEnded())
                 continue;
 
             PlayerBid playerBid = auction.getAuctionBids().getHighestBid();
-            if (playerBid == null)
+            if (playerBid == null) {
                 item++;
-            else
-                money+=playerBid.getBidPrice();
+                continue;
+            }
+
+            String economyKey = auction.getEconomy() != null ? auction.getEconomy().getKey() : "";
+            moneyByEconomy.merge(economyKey, playerBid.getBidPrice(), Double::sum);
+            totalMoney += playerBid.getBidPrice();
         }
 
-        if (money == 0.0 && item == 0) {
+        if (totalMoney == 0.0 && item == 0) {
             ConfigurationSection claimSection = itemSection.getConfigurationSection("without_claimable");
 
             ItemStack itemStack = Utils.createItemFromSection(claimSection, null);
@@ -178,11 +183,36 @@ public class ManageMenu {
             ConfigurationSection claimSection = itemSection.getConfigurationSection("with_claimable");
             PlaceholderUtil placeholderUtil = new PlaceholderUtil()
                     .addPlaceholder("%claimable_items%", String.valueOf(item))
-                    .addPlaceholder("%claimable_money%", DeluxeAuctions.getInstance().numberFormat.format(money));
+                    .addPlaceholder("%claimable_money%", DeluxeAuctions.getInstance().numberFormat.format(totalMoney));
+
+            // Per-economy collectable balance: %claimable_money_<economyKey>% for each defined economy
+            for (Economy economy : DeluxeAuctions.getInstance().economies.values())
+                placeholderUtil.addPlaceholder("%claimable_money_" + economy.getKey() + "%", DeluxeAuctions.getInstance().numberFormat.format(moneyByEconomy.getOrDefault(economy.getKey(), 0.0)));
 
             ItemStack itemStack = Utils.createItemFromSection(claimSection, placeholderUtil);
             if (itemStack == null)
                 return;
+
+            // Hide lines whose collectable amount is 0 (dynamic, per economy)
+            List<String> claimableLore = new ArrayList<>();
+            for (String line : claimSection.getStringList("lore")) {
+                if (line.contains("%claimable_items%") && item == 0)
+                    continue;
+                if (line.contains("%claimable_money%") && totalMoney <= 0.0)
+                    continue;
+
+                boolean hide = false;
+                for (Economy economy : DeluxeAuctions.getInstance().economies.values())
+                    if (line.contains("%claimable_money_" + economy.getKey() + "%") && moneyByEconomy.getOrDefault(economy.getKey(), 0.0) <= 0.0) {
+                        hide = true;
+                        break;
+                    }
+                if (hide)
+                    continue;
+
+                claimableLore.add(line);
+            }
+            Utils.changeLore(itemStack, claimableLore, placeholderUtil);
 
             this.gui.setItem(claimSection.getInt("slot"), ClickableItem.of(itemStack, (event) -> {
                 this.player.closeInventory();

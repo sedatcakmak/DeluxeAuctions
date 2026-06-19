@@ -50,13 +50,17 @@ settings:
     enabled: true
     minimum_fee: 50 # Duration fee can't be lower than this setting
     formula: "%hours% * 50" # Placeholders: %weeks% %days% %hours% %minutes% %seconds%
+    # Cap the duration (listing) fee at a percentage of the auction price (0 = no cap).
+    # Global here, or per-currency under economy_formulas. Example: 25 = max 1/4 of price.
+    max_price_percent: 0
     # Per-currency duration fee override. Listed economies use their own formula;
     # others use the formula above. Value = a formula String, or a section with
-    # its own formula + minimum_fee.
+    # its own formula + minimum_fee (+ optional max_price_percent).
     # economy_formulas:
     #   pr_economy:
     #     formula: "%hours% * 5 / 336" # 336 hours (2 weeks) = 5; shorter is proportionally cheaper
     #     minimum_fee: 0.0
+    #     max_price_percent: 25 # listing fee never exceeds 25% (1/4) of the price
   auction_flags: # Auctions' example items will have these flags
     - HIDE_ATTRIBUTES
   anti_lag: # With this system, you can prevent dupe problems a bit.
