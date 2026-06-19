@@ -139,7 +139,7 @@ public class SQLiteDatabase implements DatabaseManager {
             return;
         }
 
-        String prefix = DeluxeAuctions.getInstance().configFile.getString("database.table_prefix", "");
+        String prefix = DeluxeAuctions.getInstance().databaseConfig.getString("database.table_prefix", "");
         this.auctions = prefix + "auctions";
         this.stats = prefix + "stats";
         this.items = prefix + "items";

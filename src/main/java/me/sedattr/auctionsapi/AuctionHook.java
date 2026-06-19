@@ -101,6 +101,23 @@ public class AuctionHook {
         new MainMenu(player).open();
     }
 
+    public static double roundFee(double fee) {
+        return roundFee(fee, null);
+    }
+
+    public static double roundFee(double fee, Economy economy) {
+        if (fee <= 0.0)
+            return fee;
+
+        boolean round = (economy != null && economy.getRoundDurationPricing() != null)
+                ? economy.getRoundDurationPricing()
+                : DeluxeAuctions.getInstance().configFile.getBoolean("settings.round_duration_pricing", false);
+        if (!round)
+            return fee;
+
+        return Math.max(1, Math.round(fee));
+    }
+
     public static double calculateDurationFee(long time) {
         return calculateDurationFee(time, null, -1.0);
     }
@@ -149,7 +166,7 @@ public class AuctionHook {
         if (maxPricePercent > 0.0 && price > 0.0)
             fee = Math.min(fee, price / 100.0 * maxPricePercent);
 
-        return fee;
+        return roundFee(fee, economy);
     }
 
     public static double getPriceLimit(Player player, String type) {

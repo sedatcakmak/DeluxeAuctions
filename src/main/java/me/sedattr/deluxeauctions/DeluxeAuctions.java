@@ -46,6 +46,8 @@ public class DeluxeAuctions extends JavaPlugin {
     public YamlConfiguration categoriesFile;
     public YamlConfiguration itemsFile;
     public FileConfiguration configFile;
+    public YamlConfiguration databaseFile;
+    public FileConfiguration databaseConfig;
 
     public DataHandler dataHandler;
     public BlacklistHandler blacklistHandler;

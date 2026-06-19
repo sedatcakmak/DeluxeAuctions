@@ -28,6 +28,7 @@ public class PlayerPreferences {
     private AuctionType auctionType = DeluxeAuctions.getInstance().auctionType;
     private SortType sortType = DeluxeAuctions.getInstance().sortType;
     private String rarityType = DeluxeAuctions.getInstance().rarityType;
+    private String economyFilter = "all";
     private String search = "";
     private Category category = CategoryCache.getCategories().get(DeluxeAuctions.getInstance().category);
     private int page = 1;

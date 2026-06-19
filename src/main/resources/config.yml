@@ -46,6 +46,9 @@ settings:
   default_filter_type: "ALL" # Default filter that is selected when opening /ah menu
   purge_auctions: 60 # DAYS. Auctions older than this day will be automatically deleted. Recommended to keep the database clean.
   bid_formula: "%highest_bid% + %highest_bid% / 10" # You can set the minimum amount more than the previous bid for a new bid.
+  # Round all fees (commission + duration) to whole numbers, with a minimum of 1 (never 0).
+  # Global default; each economy in economy.yml can override this with its own round_duration_pricing.
+  round_duration_pricing: false
   duration_fee: # Duration fee can be customizable
     enabled: true
     minimum_fee: 50 # Duration fee can't be lower than this setting
@@ -173,14 +176,8 @@ player_limits:
       - deluxeauctions.mvip:100000000
 
 # PLUGIN DATABASE
-database:
-  type: "sqlite" # Database Types: mysql, sqlite.
-  table_prefix: "da_"
-  mysql_settings: # FOR MYSQL DATABASE
-    link: "com.mysql.jdbc.Driver" # new version: com.mysql.cj.jdbc.Driver
-    url: "jdbc:mysql://localhost:1907/Auction" # jdbc:mysql://host:port/database
-    user: "SedatTR" # MySQL Username
-    password: "DeluxeAuctions" # MySQL Password
+# Database settings now live in database.yml.
+# Legacy support: if database.yml is absent, a "database" section here is still read.
 
 # PLUGIN ADDONS
 addons:

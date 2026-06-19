@@ -99,7 +99,7 @@ public class CreateMenu implements MenuManager {
         double priceFeePercent = AuctionHook.calculatePriceFeePercent(this.playerAuction.getCreatePrice(), this.playerAuction.getCreateType().equals(AuctionType.BIN) ? "bin" : "normal", this.playerAuction.getCreateEconomy());
         PlaceholderUtil placeholderUtil = new PlaceholderUtil()
                 .addPlaceholder("%auction_price%", this.playerAuction.getCreateEconomy().getText().replace("%price%", DeluxeAuctions.getInstance().numberFormat.format(this.playerAuction.getCreatePrice())))
-                .addPlaceholder("%price_fee%", this.playerAuction.getCreateEconomy().getText().replace("%price%", DeluxeAuctions.getInstance().numberFormat.format(this.playerAuction.getCreatePrice()/100*priceFeePercent)))
+                .addPlaceholder("%price_fee%", this.playerAuction.getCreateEconomy().getText().replace("%price%", DeluxeAuctions.getInstance().numberFormat.format(AuctionHook.roundFee(this.playerAuction.getCreatePrice()/100*priceFeePercent, this.playerAuction.getCreateEconomy()))))
                 .addPlaceholder("%price_fee_percent%", DeluxeAuctions.getInstance().numberFormat.format(priceFeePercent));
 
         ItemStack itemStack = Utils.createItemFromSection(itemSection, placeholderUtil);
@@ -135,7 +135,7 @@ public class CreateMenu implements MenuManager {
         double priceFeePercent = AuctionHook.calculatePriceFeePercent(this.playerAuction.getCreatePrice(), this.playerAuction.getCreateType().equals(AuctionType.BIN) ? "bin" : "normal", this.playerAuction.getCreateEconomy());
         AtomicDouble totalFee = new AtomicDouble(0.0);
         if (priceFeePercent > 0.0)
-            totalFee.addAndGet(this.playerAuction.getCreatePrice()/100*priceFeePercent);
+            totalFee.addAndGet(AuctionHook.roundFee(this.playerAuction.getCreatePrice()/100*priceFeePercent, this.playerAuction.getCreateEconomy()));
 
         double durationFee = AuctionHook.calculateDurationFee(this.playerAuction.getCreateTime(), this.playerAuction.getCreateEconomy(), this.playerAuction.getCreatePrice());
         if (durationFee > 0.0)

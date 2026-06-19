@@ -39,6 +39,12 @@
 # token_manager
 # ultra_economy: you need to add ultraeconomy_currency line for the currency name
 # yaml: you need to add yaml_folder_name, yaml_file_name and yaml_node_text lines for the currency
+#
+# Optional per-economy settings:
+#   round_duration_pricing: true   # round this currency's fees to whole numbers, minimum 1
+#                                  # (overrides settings.round_duration_pricing in config.yml)
+#   filter_name: "&6Coins"         # name shown in the auctions filter currency list
+#                                  # (falls back to "name" if not set)
 vault_economy:
   enabled: true
   type: vault

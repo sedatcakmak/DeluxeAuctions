@@ -113,7 +113,7 @@ public class MySQLDatabase implements DatabaseManager {
     }
 
     public MySQLDatabase() {
-        ConfigurationSection section = DeluxeAuctions.getInstance().getConfig()
+        ConfigurationSection section = DeluxeAuctions.getInstance().databaseConfig
                 .getConfigurationSection("database.mysql_settings");
         if (section == null) {
             DeluxeAuctions.getInstance().databaseManager = new SQLiteDatabase();
@@ -134,7 +134,7 @@ public class MySQLDatabase implements DatabaseManager {
         }
         DeluxeAuctions.getInstance().dataHandler.debug("MySQL is successfully connected!");
 
-        String prefix = DeluxeAuctions.getInstance().configFile.getString("database.table_prefix", "");
+        String prefix = DeluxeAuctions.getInstance().databaseConfig.getString("database.table_prefix", "");
         this.auctions = prefix + "auctions";
         this.stats = prefix + "stats";
         this.items = prefix + "items";

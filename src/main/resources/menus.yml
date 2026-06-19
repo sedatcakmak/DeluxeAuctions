@@ -379,6 +379,16 @@ auctions_menu:
       - ALL
       - BIN
       - NORMAL
+    # Currency sub-filter: cycled with shift left/right click.
+    # Only shown/active when at least 2 economies (economy.yml) are enabled.
+    # The displayed name uses economy.yml "filter_name" (falls back to "name").
+    # %economy_filter%      -> selected currency name
+    # %economy_filter_list% -> all currencies (one line each, selected highlighted)
+    currency_filter:
+      enabled: true
+      all_name: "&aAll"
+      selected: "&2&l▶ &a%economy_name%"
+      not_selected: "&8&l▶ &7%economy_name%"
     lore:
       all:
         - "&2&l▶ &aShow All"
@@ -387,6 +397,8 @@ auctions_menu:
         - ""
         - "&bRight click to go backwards!"
         - "&eLeft click to switch filter!"
+        - "%economy_filter_list%"
+        - "&dCurrency: %economy_filter% &7(shift left/right)"
       bin:
         - "&8&l▶ &7Show All"
         - "&2&l▶ &aBIN"
@@ -394,6 +406,8 @@ auctions_menu:
         - ""
         - "&bRight click to go backwards!"
         - "&eLeft click to switch filter!"
+        - "%economy_filter_list%"
+        - "&dCurrency: %economy_filter% &7(shift left/right)"
       normal:
         - "&8&l▶ &7Show All"
         - "&8&l▶ &7BIN"
@@ -401,6 +415,8 @@ auctions_menu:
         - ""
         - "&bRight click to go backwards!"
         - "&eLeft click to switch filter!"
+        - "%economy_filter_list%"
+        - "&dCurrency: %economy_filter% &7(shift left/right)"
   categories:
     material: ENDER_EYE
     data: 0

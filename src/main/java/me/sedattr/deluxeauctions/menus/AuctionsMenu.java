@@ -94,7 +94,11 @@ public class AuctionsMenu implements MenuManager {
     }
 
     private void updateTotalPage() {
-        this.filteredAuctions = AuctionCache.getFilteredAuctions(this.playerAuction.getAuctionType(), this.playerAuction.getRarityType(), this.playerAuction.getCategory(), this.playerAuction.getSearch());
+        // Drop a currency filter that points to a now-disabled economy
+        if (!this.playerAuction.getEconomyFilter().equals("all") && !DeluxeAuctions.getInstance().economies.containsKey(this.playerAuction.getEconomyFilter()))
+            this.playerAuction.setEconomyFilter("all");
+
+        this.filteredAuctions = AuctionCache.getFilteredAuctions(this.playerAuction.getAuctionType(), this.playerAuction.getRarityType(), this.playerAuction.getCategory(), this.playerAuction.getSearch(), this.playerAuction.getEconomyFilter());
         this.currentAuctions = AuctionCache.getOnGoingAuctions(this.filteredAuctions, this.playerAuction.getSortType(), this.playerAuction.getPage(), this.slots.size());
 
         int auctionAmount = this.filteredAuctions.size();
@@ -302,6 +306,7 @@ public class AuctionsMenu implements MenuManager {
         this.playerAuction.setAuctionType(DeluxeAuctions.getInstance().auctionType);
         this.playerAuction.setSortType(DeluxeAuctions.getInstance().sortType);
         this.playerAuction.setRarityType(DeluxeAuctions.getInstance().rarityType);
+        this.playerAuction.setEconomyFilter("all");
 
         open(this.playerAuction.getCategory().getName(), 1);
     }
@@ -321,7 +326,8 @@ public class AuctionsMenu implements MenuManager {
     private boolean hasResetSettings() {
         return !this.playerAuction.getSearch().isEmpty() ||
                 !this.playerAuction.getAuctionType().equals(DeluxeAuctions.getInstance().auctionType) ||
-                !this.playerAuction.getSortType().equals(DeluxeAuctions.getInstance().sortType);
+                !this.playerAuction.getSortType().equals(DeluxeAuctions.getInstance().sortType) ||
+                !this.playerAuction.getEconomyFilter().equals("all");
     }
 
     private void loadSearchItem() {
@@ -504,11 +510,33 @@ public class AuctionsMenu implements MenuManager {
         if (filterItem == null)
             return;
 
+        boolean economyFilterAvailable = isEconomyFilterAvailable();
+
         List<String> lore = this.section.getStringList("auction_filter.lore." + this.playerAuction.getAuctionType().name().toLowerCase(Locale.ENGLISH));
         List<String> newLore = new ArrayList<>();
-        if (!lore.isEmpty())
-            for (String line : lore)
-                newLore.add(Utils.colorize(line));
+        for (String line : lore) {
+            // %economy_filter_list% expands to one line per currency (skipped entirely when unavailable)
+            if (line.contains("%economy_filter_list%")) {
+                if (!economyFilterAvailable)
+                    continue;
+
+                for (String option : getEconomyFilterOptions()) {
+                    String state = option.equals(this.playerAuction.getEconomyFilter()) ? "selected" : "not_selected";
+                    String format = this.section.getString("auction_filter.currency_filter." + state);
+                    if (format == null)
+                        continue;
+
+                    newLore.add(Utils.colorize(format.replace("%economy_name%", economyFilterName(option))));
+                }
+                continue;
+            }
+
+            // Currency-tagged lines vanish entirely when the sub-filter isn't available
+            if (!economyFilterAvailable && line.contains("%economy_filter%"))
+                continue;
+
+            newLore.add(Utils.colorize(line.replace("%economy_filter%", economyFilterName(this.playerAuction.getEconomyFilter()))));
+        }
 
         Utils.changeLore(filterItem, newLore, null);
         int slot = this.section.getInt("auction_filter.slot");
@@ -516,12 +544,34 @@ public class AuctionsMenu implements MenuManager {
             ClickType clickType = event.getClick();
             Utils.playSound(player, "filter_item_click");
 
+            // Shift-click cycles the currency sub-filter; reserved only when more than one currency is enabled
+            if (economyFilterAvailable && (clickType.equals(ClickType.SHIFT_LEFT) || clickType.equals(ClickType.SHIFT_RIGHT))) {
+                List<String> options = getEconomyFilterOptions();
+                int index = options.indexOf(this.playerAuction.getEconomyFilter());
+                if (index < 0)
+                    index = 0;
+
+                if (clickType.equals(ClickType.SHIFT_RIGHT)) {
+                    index--;
+                    if (index < 0)
+                        index = options.size()-1;
+                } else {
+                    index++;
+                    if (index >= options.size())
+                        index = 0;
+                }
+
+                this.playerAuction.setEconomyFilter(options.get(index));
+                open(this.playerAuction.getCategory().getName(), Math.min(this.playerAuction.getPage(), this.totalPage));
+                return;
+            }
+
             List<String> types = this.section.getStringList("auction_filter.types");
             int currentType = !types.isEmpty() && types.contains(this.playerAuction.getAuctionType().name()) ? types.indexOf(this.playerAuction.getAuctionType().name()) : 0;
 
-            // backwards
+            // backwards (plain right click only; shift is reserved for the currency sub-filter)
             if (!types.isEmpty()) {
-                if (clickType.equals(ClickType.RIGHT) || clickType.equals(ClickType.SHIFT_RIGHT)) {
+                if (clickType.equals(ClickType.RIGHT)) {
                     currentType--;
                     if (currentType < 0)
                         currentType = types.size()-1;
@@ -538,6 +588,37 @@ public class AuctionsMenu implements MenuManager {
 
             open(this.playerAuction.getCategory().getName(), Math.min(this.playerAuction.getPage(), this.totalPage));
         }));
+    }
+
+    // Currency sub-filter is only meaningful when at least two currencies are enabled
+    private boolean isEconomyFilterAvailable() {
+        return this.section.getBoolean("auction_filter.currency_filter.enabled", true)
+                && DeluxeAuctions.getInstance().economies.size() >= 2;
+    }
+
+    // "all" + each enabled economy key, ordered by economy.yml slot for a stable cycle
+    private List<String> getEconomyFilterOptions() {
+        List<Economy> economies = new ArrayList<>(DeluxeAuctions.getInstance().economies.values());
+        economies.sort(Comparator.comparingInt(Economy::getSlot));
+
+        List<String> options = new ArrayList<>(economies.size() + 1);
+        options.add("all");
+        for (Economy economy : economies)
+            options.add(economy.getKey());
+
+        return options;
+    }
+
+    private String economyFilterName(String key) {
+        if (key == null || key.equals("all"))
+            return this.section.getString("auction_filter.currency_filter.all_name", "&aHepsi");
+
+        Economy economy = DeluxeAuctions.getInstance().economies.get(key);
+        if (economy == null)
+            return key;
+
+        String filterName = economy.getFilterName();
+        return (filterName != null && !filterName.isEmpty()) ? filterName : economy.getName();
     }
 
     private void updateItems() {
@@ -730,7 +811,7 @@ public class AuctionsMenu implements MenuManager {
                 if (!description.isEmpty()) {
                     for (String desc : description)
                         newLore.add(Utils.colorize(desc
-                                .replace("%category_item_amount%", String.valueOf(AuctionCache.getFilteredAuctions(this.playerAuction.getAuctionType(), this.playerAuction.getRarityType(), auctionCategory, this.playerAuction.getSearch()).size()))));
+                                .replace("%category_item_amount%", String.valueOf(AuctionCache.getFilteredAuctions(this.playerAuction.getAuctionType(), this.playerAuction.getRarityType(), auctionCategory, this.playerAuction.getSearch(), this.playerAuction.getEconomyFilter()).size()))));
                 }
 
                 continue;

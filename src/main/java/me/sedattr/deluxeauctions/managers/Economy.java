@@ -12,6 +12,7 @@ import org.bukkit.inventory.ItemStack;
 public class Economy {
     private final String key;
     private final String name;
+    private final String filterName;
     private final String type;
     private final String text;
     private final String permission;
@@ -19,16 +20,19 @@ public class Economy {
     private EconomyManager manager;
     private final ItemStack item;
     private final int slot;
+    private final Boolean roundDurationPricing;
 
     public Economy(String type) {
         this.type = type;
         this.name = type;
+        this.filterName = null;
         this.key = "economy";
         this.text = "%price%";
         this.enabled = true;
         this.permission = "";
         this.item = null;
         this.slot = 0;
+        this.roundDurationPricing = null;
 
         switch (this.type) {
             case "coins_engine":
@@ -106,12 +110,14 @@ public class Economy {
     public Economy(ConfigurationSection section) {
         this.key = section.getName();
         this.name = section.getString("name", "");
+        this.filterName = section.getString("filter_name");
         this.type = section.getString("type", "");
         this.text = section.getString("text", "");
         this.permission = section.getString("permission", "");
         this.enabled = section.getBoolean("enabled", false);
         this.slot = section.getInt("item.slot", 0);
         this.item = Utils.createItemFromSection(section.getConfigurationSection("item"), null);
+        this.roundDurationPricing = section.isSet("round_duration_pricing") ? section.getBoolean("round_duration_pricing") : null;
 
         switch (this.type) {
             case "coins_engine":

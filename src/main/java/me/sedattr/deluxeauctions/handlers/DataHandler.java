@@ -102,6 +102,7 @@ public class DataHandler {
         checkOldFiles();
         createDefaultFiles();
 
+        setupDatabaseConfig();
         setupDatabase();
         DeluxeAuctions.getInstance().menuHandler = new MenuHandler();
         DeluxeAuctions.getInstance().blacklistHandler = new BlacklistHandler();
@@ -188,6 +189,20 @@ public class DataHandler {
         }
     }
 
+    // Resolve database settings source: prefer database.yml, fall back to the
+    // legacy "database" section in config.yml so old setups keep working.
+    public void setupDatabaseConfig() {
+        File databaseFile = new File(DeluxeAuctions.getInstance().getDataFolder(), "database.yml");
+        if (!databaseFile.exists() && DeluxeAuctions.getInstance().configFile.isConfigurationSection("database")) {
+            DeluxeAuctions.getInstance().databaseConfig = DeluxeAuctions.getInstance().configFile;
+            Logger.sendConsoleMessage("Using legacy database settings from config.yml. Move them to database.yml when possible.", Logger.LogLevel.WARN);
+            return;
+        }
+
+        DeluxeAuctions.getInstance().databaseFile = getConfiguration("database.yml");
+        DeluxeAuctions.getInstance().databaseConfig = DeluxeAuctions.getInstance().databaseFile;
+    }
+
     public YamlConfiguration getConfiguration(String name) {
         File file = new File(DeluxeAuctions.getInstance().getDataFolder(), name);
         try {
@@ -243,7 +258,7 @@ public class DataHandler {
         if (DeluxeAuctions.getInstance().databaseManager != null)
             return;
 
-        String dataType = DeluxeAuctions.getInstance().getConfig().getString("database.type", "sqlite");
+        String dataType = DeluxeAuctions.getInstance().databaseConfig.getString("database.type", "sqlite");
         if (dataType.isEmpty())
             dataType = "sqlite";
 

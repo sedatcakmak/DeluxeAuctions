@@ -1,0 +1,12 @@
+# PLUGIN DATABASE
+# Database settings moved here from config.yml.
+# Legacy support: if this file is missing but config.yml still has a "database"
+# section, those old settings are used instead. Keep this file to use it.
+database:
+  type: "sqlite" # Database Types: mysql, sqlite.
+  table_prefix: "da_"
+  mysql_settings: # FOR MYSQL DATABASE
+    link: "com.mysql.jdbc.Driver" # new version: com.mysql.cj.jdbc.Driver
+    url: "jdbc:mysql://localhost:1907/Auction" # jdbc:mysql://host:port/database
+    user: "SedatTR" # MySQL Username
+    password: "DeluxeAuctions" # MySQL Password

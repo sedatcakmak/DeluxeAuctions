@@ -85,8 +85,14 @@ public class AuctionCache {
     }
 
     public static List<Auction> getFilteredAuctions(AuctionType type, String rarity, Category category, String search) {
+        return getFilteredAuctions(type, rarity, category, search, "all");
+    }
+
+    public static List<Auction> getFilteredAuctions(AuctionType type, String rarity, Category category, String search, String economyFilter) {
         if (auctions.isEmpty())
             return Collections.emptyList();
+
+        boolean economyAll = economyFilter == null || economyFilter.isEmpty() || economyFilter.equalsIgnoreCase("all");
 
         ConcurrentHashMap.KeySetView<Auction, Boolean> result = ConcurrentHashMap.newKeySet();
 
@@ -95,6 +101,11 @@ public class AuctionCache {
                 return;
             if (auction.isEnded())
                 return;
+            if (!economyAll) {
+                Economy economy = auction.getEconomy();
+                if (economy == null || !economyFilter.equals(economy.getKey()))
+                    return;
+            }
             ItemStack itemStack = auction.getAuctionItem();
             if (itemStack == null)
                 return;
