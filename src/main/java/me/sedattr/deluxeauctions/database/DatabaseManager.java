@@ -21,5 +21,8 @@ public interface DatabaseManager {
     void saveItem(UUID uuid, ItemStack item);
     void saveStats(PlayerStats stats);
 
+    PlayerStats loadStatsSync(UUID uuid);
+    void deleteStats(UUID uuid);
+
     void shutdown();
 }

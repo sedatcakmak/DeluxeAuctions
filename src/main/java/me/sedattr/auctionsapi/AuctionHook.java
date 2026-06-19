@@ -40,12 +40,31 @@ public class AuctionHook {
     }
 
     public static double calculatePriceFeePercent(double price, String type) {
-        ConfigurationSection feeSection = DeluxeAuctions.getInstance().configFile.getConfigurationSection(type + "_auction.price_fees");
-        if (feeSection == null)
-            return 0.0;
+        return calculatePriceFeePercent(price, type, null);
+    }
 
+    public static double calculatePriceFeePercent(double price, String type, Economy economy) {
         boolean status = DeluxeAuctions.getInstance().configFile.getBoolean(type + "_auction.fee");
         if (!status)
+            return 0.0;
+
+        // Per-economy fee override: <type>_auction.economy_fees.<economyKey>
+        // Value may be a flat percent (e.g. "pr_economy: 10.0") or a price-range
+        // section using the same format as price_fees. When set, it replaces the
+        // default price_fees table for that currency.
+        if (economy != null && economy.getKey() != null) {
+            String path = type + "_auction.economy_fees." + economy.getKey();
+            if (DeluxeAuctions.getInstance().configFile.isConfigurationSection(path))
+                return calculateFeeFromSection(DeluxeAuctions.getInstance().configFile.getConfigurationSection(path), price);
+            if (DeluxeAuctions.getInstance().configFile.isSet(path))
+                return Math.max(DeluxeAuctions.getInstance().configFile.getDouble(path), 0.0);
+        }
+
+        return calculateFeeFromSection(DeluxeAuctions.getInstance().configFile.getConfigurationSection(type + "_auction.price_fees"), price);
+    }
+
+    private static double calculateFeeFromSection(ConfigurationSection feeSection, double price) {
+        if (feeSection == null)
             return 0.0;
 
         double currentPrice = 0.0;
@@ -83,6 +102,10 @@ public class AuctionHook {
     }
 
     public static double calculateDurationFee(long time) {
+        return calculateDurationFee(time, null);
+    }
+
+    public static double calculateDurationFee(long time, Economy economy) {
         ConfigurationSection durationSection = DeluxeAuctions.getInstance().configFile.getConfigurationSection("settings.duration_fee");
         if (durationSection == null)
             return 0.0;
@@ -92,6 +115,21 @@ public class AuctionHook {
             return 0.0;
 
         String formula = durationSection.getString("formula", "%hours% * 50");
+        double minimumFee = durationSection.getDouble("minimum_fee", 0.0);
+
+        // Per-economy duration fee override: settings.duration_fee.economy_formulas.<economyKey>
+        // Value may be a formula String, or a section with its own formula + minimum_fee.
+        if (economy != null && economy.getKey() != null) {
+            String base = "settings.duration_fee.economy_formulas." + economy.getKey();
+            if (DeluxeAuctions.getInstance().configFile.isConfigurationSection(base)) {
+                ConfigurationSection ecoSection = DeluxeAuctions.getInstance().configFile.getConfigurationSection(base);
+                formula = ecoSection.getString("formula", formula);
+                minimumFee = ecoSection.getDouble("minimum_fee", minimumFee);
+            } else if (DeluxeAuctions.getInstance().configFile.isString(base)) {
+                formula = DeluxeAuctions.getInstance().configFile.getString(base, formula);
+            }
+        }
+
         Expression e = new ExpressionBuilder(formula
                 .replace("%weeks%", String.valueOf(time/604800))
                 .replace("%days%", String.valueOf(time/86400))
@@ -101,7 +139,7 @@ public class AuctionHook {
                 .build();
         double formulaPrice = e.evaluate();
 
-        return Math.max(formulaPrice, durationSection.getDouble("minimum_fee", 0.0));
+        return Math.max(formulaPrice, minimumFee);
     }
 
     public static double getPriceLimit(Player player, String type) {

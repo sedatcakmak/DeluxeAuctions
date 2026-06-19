@@ -106,7 +106,9 @@ public class MySQLDatabase implements DatabaseManager {
             if (isConnected())
                 this.connection.close();
         } catch (SQLException e) {
-            throw new RuntimeException(e);
+            // Never throw out of shutdown: it runs inside onDisable and would abort the
+            // rest of the disable sequence.
+            Logger.sendConsoleMessage("Error while closing database connection: " + e.getMessage(), Logger.LogLevel.ERROR);
         }
     }
 
@@ -381,18 +383,42 @@ public class MySQLDatabase implements DatabaseManager {
         String sql = "REPLACE INTO " + this.auctions
                 + " (uuid, owner, display_name, item, bids, price, end_time, type, claimed, economy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
         runTask(() -> {
-            try (PreparedStatement statement = getConnection().prepareStatement(sql)) {
-                int i = 0;
-                long time = System.currentTimeMillis();
+            Connection connection = getConnection();
+            if (connection == null)
+                return;
+
+            // Wrap the bulk save in a single transaction + commit only on shutdown, where it
+            // runs on the main thread: one commit instead of one-per-row keeps it short. During
+            // normal async runtime saves we stay on autocommit so a background thread never
+            // flips the shared connection's commit mode under another save.
+            boolean transactional = DeluxeAuctions.getInstance().disabled;
+            boolean previousAutoCommit = true;
+
+            long time = System.currentTimeMillis();
+            int saved = 0;
+            int skipped = 0;
+            int batched = 0;
+            try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                if (transactional) {
+                    previousAutoCommit = connection.getAutoCommit();
+                    connection.setAutoCommit(false);
+                }
+
                 for (Auction auction : AuctionCache.getAuctions().values()) {
+                    String base64 = Utils.itemToBase64(auction.getAuctionItem());
+                    // Skip auctions whose item cannot be serialized (nested container/bundle
+                    // bombs) or is too large to ever load back: writing it would replace the
+                    // last good row with empty data, so leave the stored row untouched.
+                    if (auction.getAuctionItem() != null && (base64.isEmpty() || base64.length() > 1_398_102)) {
+                        skipped++;
+                        continue;
+                    }
+
                     StringBuilder playerBids = new StringBuilder();
                     List<PlayerBid> bids = auction.getAuctionBids().getPlayerBids();
                     if (!bids.isEmpty()) {
-                        for (PlayerBid bid : bids) {
-                            String string = bid.toString();
-
-                            playerBids.append(",,").append(string);
-                        }
+                        for (PlayerBid bid : bids)
+                            playerBids.append(",,").append(bid.toString());
 
                         playerBids.delete(0, 2);
                     }
@@ -400,7 +426,7 @@ public class MySQLDatabase implements DatabaseManager {
                     statement.setString(1, auction.getAuctionUUID().toString());
                     statement.setString(2, auction.getAuctionOwner().toString());
                     statement.setString(3, auction.getAuctionOwnerDisplayName());
-                    statement.setString(4, Utils.itemToBase64(auction.getAuctionItem()));
+                    statement.setString(4, base64);
                     statement.setString(5, playerBids.toString());
                     statement.setDouble(6, auction.getAuctionPrice());
                     statement.setLong(7, auction.getAuctionEndTime());
@@ -408,15 +434,36 @@ public class MySQLDatabase implements DatabaseManager {
                     statement.setBoolean(9, auction.isSellerClaimed());
                     statement.setString(10, auction.getEconomy().getKey());
 
-                    statement.execute();
-                    i++;
+                    statement.addBatch();
+                    saved++;
+                    if (++batched >= 1000) {
+                        statement.executeBatch();
+                        batched = 0;
+                    }
                 }
 
-                Logger.sendConsoleMessage("&f" + i + " %level_color%auctions saved in &f"
-                        + (System.currentTimeMillis() - time) + " ms%level_color%!", Logger.LogLevel.INFO);
+                if (batched > 0)
+                    statement.executeBatch();
+                if (transactional)
+                    connection.commit();
+
+                Logger.sendConsoleMessage("&f" + saved + " %level_color%auctions saved in &f"
+                        + (System.currentTimeMillis() - time) + " ms%level_color%!"
+                        + (skipped > 0 ? " &7(" + skipped + " skipped)" : ""), Logger.LogLevel.INFO);
                 DeluxeAuctions.getInstance().converting = false;
             } catch (SQLException x) {
+                if (transactional)
+                    try {
+                        connection.rollback();
+                    } catch (SQLException ignored) {
+                    }
                 handleSQLException(x, this::saveAuctions);
+            } finally {
+                if (transactional)
+                    try {
+                        connection.setAutoCommit(previousAutoCommit);
+                    } catch (SQLException ignored) {
+                    }
             }
         });
     }
@@ -437,11 +484,18 @@ public class MySQLDatabase implements DatabaseManager {
                 playerBids.delete(0, 2);
             }
 
+            String base64 = Utils.itemToBase64(auction.getAuctionItem());
+            if (auction.getAuctionItem() != null && (base64.isEmpty() || base64.length() > 1_398_102)) {
+                Logger.sendConsoleMessage("Skipped saving unserializable auction &f" + auction.getAuctionUUID(), Logger.LogLevel.WARN);
+                AuctionCache.removeUpdatingAuction(auction.getAuctionUUID());
+                return;
+            }
+
             try (PreparedStatement statement = getConnection().prepareStatement(sql)) {
                 statement.setString(1, auction.getAuctionUUID().toString());
                 statement.setString(2, auction.getAuctionOwner().toString());
                 statement.setString(3, auction.getAuctionOwnerDisplayName());
-                statement.setString(4, Utils.itemToBase64(auction.getAuctionItem()));
+                statement.setString(4, base64);
                 statement.setString(5, playerBids.toString());
                 statement.setDouble(6, auction.getAuctionPrice());
                 statement.setLong(7, auction.getAuctionEndTime());
@@ -509,6 +563,44 @@ public class MySQLDatabase implements DatabaseManager {
                     DeluxeAuctions.getInstance().multiServerManager.updateStats(uuid);
             } catch (SQLException x) {
                 handleSQLException(x, () -> saveStats(stats));
+            }
+        });
+    }
+
+    public PlayerStats loadStatsSync(UUID uuid) {
+        String sql = "SELECT * FROM " + this.stats + " WHERE uuid = ?";
+        try (PreparedStatement statement = getConnection().prepareStatement(sql)) {
+            statement.setString(1, uuid.toString());
+            ResultSet stat = statement.executeQuery();
+            if (!stat.next())
+                return null;
+
+            PlayerStats data = new PlayerStats(uuid);
+            data.setWonAuctions(stat.getInt(2));
+            data.setLostAuctions(stat.getInt(3));
+            data.setTotalBids(stat.getInt(4));
+            data.setHighestBid(stat.getDouble(5));
+            data.setSpentMoney(stat.getDouble(6));
+            data.setCreatedAuctions(stat.getInt(7));
+            data.setExpiredAuctions(stat.getInt(8));
+            data.setSoldAuctions(stat.getInt(9));
+            data.setEarnedMoney(stat.getDouble(10));
+            data.setTotalFees(stat.getDouble(11));
+            return data;
+        } catch (Exception x) {
+            x.printStackTrace();
+            return null;
+        }
+    }
+
+    public void deleteStats(UUID uuid) {
+        String sql = "DELETE FROM " + this.stats + " WHERE uuid = ?";
+        runTask(() -> {
+            try (PreparedStatement statement = getConnection().prepareStatement(sql)) {
+                statement.setString(1, uuid.toString());
+                statement.execute();
+            } catch (SQLException x) {
+                handleSQLException(x, () -> deleteStats(uuid));
             }
         });
     }

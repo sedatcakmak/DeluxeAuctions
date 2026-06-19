@@ -11,6 +11,9 @@ import me.sedattr.deluxeauctions.others.Utils;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+
+import java.util.List;
 
 public class EconomyMenu {
     private final Player player;
@@ -38,6 +41,9 @@ public class EconomyMenu {
     }
 
     private void loadEconomyItems() {
+        String unselectedText = Utils.colorize(this.section.getString("unselected_text", "&eSeçmek için tıklayın!"));
+        String selectedText = Utils.colorize(this.section.getString("selected_text", "&bŞu an seçili!"));
+
         for (Economy economy : DeluxeAuctions.getInstance().economies.values()) {
             if (!economy.isEnabled())
                 continue;
@@ -45,11 +51,21 @@ public class EconomyMenu {
             PlaceholderUtil placeholderUtil = new PlaceholderUtil()
                     .addPlaceholder("%economy_name%", economy.getName());
 
-            this.gui.setItem(economy.getSlot(), ClickableItem.of(economy.getItem(), (event) -> {
-                if (this.playerAuction.getCreateEconomy().getKey().equals(economy.getKey())) {
-                    Utils.sendMessage(player, "already_selected_economy", placeholderUtil);
-                    return;
+            ItemStack item = economy.getItem();
+            if (item != null && this.playerAuction.getCreateEconomy().getKey().equals(economy.getKey())) {
+                item = item.clone();
+                ItemMeta meta = item.getItemMeta();
+                if (meta != null && meta.getLore() != null) {
+                    List<String> lore = meta.getLore();
+                    lore.replaceAll(line -> line.equals(unselectedText) ? selectedText : line);
+                    meta.setLore(lore);
+                    item.setItemMeta(meta);
                 }
+            }
+
+            this.gui.setItem(economy.getSlot(), ClickableItem.of(item, (event) -> {
+                if (this.playerAuction.getCreateEconomy().getKey().equals(economy.getKey()))
+                    return;
 
                 if (!economy.getPermission().isEmpty() && !player.hasPermission(economy.getPermission())) {
                     Utils.sendMessage(player, "no_permission_for_economy", placeholderUtil);
@@ -57,7 +73,7 @@ public class EconomyMenu {
                 }
 
                 this.playerAuction.setCreateEconomy(economy);
-                Utils.sendMessage(player, "selected_economy", placeholderUtil);
+                open();
             }));
         }
     }

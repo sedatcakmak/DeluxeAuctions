@@ -42,6 +42,7 @@ admin_usage:
   - "&8- &c/%command_name% cancel [auction uuid]: &fCancels player's auction."
   - "&8- &c/%command_name% lock: &fLocks plugin to close temporarily. (Type again to unlock)"
   - "&8- &c/%command_name% convert [auctionmaster/zauctionhouse]: &fConverts auctions from other plugins."
+  - "&8- &c/%command_name% transfer [from] [to]: &fMoves a player's auctions, bids and stats to another."
   - "&8- &c/%command_name% reload: &fReloads plugin."
 view_usage: "&cCorrect Usage: &7/%command_name% view [player name/auction uuid]"
 search_usage: "&cCorrect Usage: &7/%command_name% search [input]"
@@ -49,6 +50,10 @@ sell_usage: "&cCorrect Usage: &7/%command_name% sell [price] (duration) (bin/nor
 admin_cancel_usage: "&cCorrect Usage: &7/%command_name% cancel [auction uuid]"
 admin_convert_usage: "&cCorrect Usage: &7/%command_name% convert [auctionmaster/zauctionhouse]"
 admin_menu_usage: "&cCorrect Usage: &7/%command_name% menu [player] (category)"
+admin_transfer_usage: "&cCorrect Usage: &7/%command_name% transfer [from] [to]"
+admin_transfer_same: "&8[&cAuctions&8] &7You can't transfer auctions to the same player!"
+admin_transferred: "&8[&aAuctions&8] &7Transferred &f%auction_count% &7auctions and &f%bid_count% &7bids from &f%from% &7to &f%to%&7!"
+wrong_player: "&8[&cAuctions&8] &7Player &f%player_name% &7is not found!"
 
 bought: "&8[&aAuctions&8] &7You purchased &f%item_displayname% &7for &6%auction_price%&7!"
 sold: "&8[&aAuctions&8] &f%buyer_displayname% &7bought &f%item_displayname% &7for &6%auction_price%&7!"

@@ -306,8 +306,13 @@ public class AuctionsMenu implements MenuManager {
         open(this.playerAuction.getCategory().getName(), 1);
     }
 
+    // Resource pack themed menus drop decorative glass fillers
+    private boolean isPackApplied() {
+        return DeluxeAuctions.getInstance().menuHandler.isPackApplied(this.player, this.section.getName());
+    }
+
     private void handleEmptyResetSlot(int slot) {
-        if (this.section.getIntegerList("glass").contains(slot))
+        if (!isPackApplied() && this.section.getIntegerList("glass").contains(slot))
             gui.setItem(slot, ClickableItem.empty(this.playerAuction.getCategory().getGlass()));
         else
             gui.setItem(slot, null);
@@ -588,7 +593,7 @@ public class AuctionsMenu implements MenuManager {
         int previousSlot = categoriesSection.getInt("previous_page.slot");
 
         String fillType =  categoriesSection.getString("pagination.fill_type", "all_glass");
-        if (fillType.endsWith("glass")) {
+        if (fillType.endsWith("glass") && !isPackApplied()) {
             this.gui.setItem(previousSlot, ClickableItem.empty(this.playerAuction.getCategory().getGlass()));
             this.gui.setItem(nextSlot, ClickableItem.empty(this.playerAuction.getCategory().getGlass()));
 

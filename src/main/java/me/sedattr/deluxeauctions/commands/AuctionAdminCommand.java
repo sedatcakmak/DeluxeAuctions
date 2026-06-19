@@ -3,16 +3,22 @@ package me.sedattr.deluxeauctions.commands;
 import me.sedattr.deluxeauctions.DeluxeAuctions;
 import me.sedattr.auctionsapi.AuctionHook;
 import me.sedattr.auctionsapi.cache.AuctionCache;
+import me.sedattr.auctionsapi.cache.PlayerCache;
 import me.sedattr.deluxeauctions.converters.AuctionMasterConverter;
 import me.sedattr.deluxeauctions.converters.ZAuctionHouseConverter;
+import me.sedattr.deluxeauctions.database.DatabaseManager;
 import me.sedattr.deluxeauctions.inventoryapi.inventory.InventoryAPI;
 import me.sedattr.deluxeauctions.managers.Auction;
 import me.sedattr.deluxeauctions.managers.Category;
+import me.sedattr.deluxeauctions.managers.PlayerBid;
+import me.sedattr.deluxeauctions.managers.PlayerStats;
 import me.sedattr.deluxeauctions.menus.*;
 import me.sedattr.deluxeauctions.others.Logger;
 import me.sedattr.deluxeauctions.others.PlaceholderUtil;
+import me.sedattr.deluxeauctions.others.TaskUtils;
 import me.sedattr.deluxeauctions.others.Utils;
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -35,12 +41,16 @@ public class AuctionAdminCommand implements CommandExecutor, TabCompleter {
             this.args.put("cancel", Collections.singletonList("cancel"));
             this.args.put("lock", Collections.singletonList("lock"));
             this.args.put("convert", Collections.singletonList("convert"));
+            this.args.put("transfer", Collections.singletonList("transfer"));
         } else {
             this.args.put("reload", section.getStringList("reload"));
             this.args.put("menu", section.getStringList("menu"));
             this.args.put("cancel", section.getStringList("cancel"));
             this.args.put("lock", section.getStringList("lock"));
             this.args.put("convert", section.getStringList("convert"));
+
+            List<String> transferArgs = section.getStringList("transfer");
+            this.args.put("transfer", transferArgs.isEmpty() ? Collections.singletonList("transfer") : transferArgs);
         }
     }
 
@@ -101,6 +111,57 @@ public class AuctionAdminCommand implements CommandExecutor, TabCompleter {
                 }
 
                 return false;
+            }
+
+            if (this.args.get("transfer").contains(lowerCaseArg)) {
+                if (!Utils.hasPermission(commandSender, "admin_commands", "transfer")) {
+                    Utils.sendMessage(commandSender, "no_permission");
+                    return false;
+                }
+
+                if (args.length < 3) {
+                    Utils.sendMessage(commandSender, "admin_transfer_usage", placeholderUtil);
+                    return false;
+                }
+
+                String fromArg = args[1];
+                String toArg = args[2];
+
+                // Offline player resolution can block (online-mode lookups) and the data swap
+                // touches the database, so the whole operation runs off the main thread.
+                TaskUtils.runAsync(() -> {
+                    UUID fromUUID = resolveUUID(fromArg);
+                    if (fromUUID == null) {
+                        Utils.sendMessage(commandSender, "wrong_player", new PlaceholderUtil()
+                                .addPlaceholder("%player_name%", fromArg));
+                        return;
+                    }
+
+                    UUID toUUID = resolveUUID(toArg);
+                    if (toUUID == null) {
+                        Utils.sendMessage(commandSender, "wrong_player", new PlaceholderUtil()
+                                .addPlaceholder("%player_name%", toArg));
+                        return;
+                    }
+
+                    if (fromUUID.equals(toUUID)) {
+                        Utils.sendMessage(commandSender, "admin_transfer_same");
+                        return;
+                    }
+
+                    String fromName = nameOf(fromUUID, fromArg);
+                    String toName = nameOf(toUUID, toArg);
+
+                    int[] counts = transferData(fromUUID, toUUID, toName);
+
+                    Utils.sendMessage(commandSender, "admin_transferred", new PlaceholderUtil()
+                            .addPlaceholder("%from%", fromName)
+                            .addPlaceholder("%to%", toName)
+                            .addPlaceholder("%auction_count%", String.valueOf(counts[0]))
+                            .addPlaceholder("%bid_count%", String.valueOf(counts[1])));
+                });
+
+                return true;
             }
 
             if (this.args.get("convert").contains(lowerCaseArg)) {
@@ -252,5 +313,100 @@ public class AuctionAdminCommand implements CommandExecutor, TabCompleter {
 
         Utils.sendMessage(commandSender, "admin_usage", placeholderUtil);
         return false;
+    }
+
+    private UUID resolveUUID(String input) {
+        try {
+            return UUID.fromString(input);
+        } catch (IllegalArgumentException ignored) {
+        }
+
+        OfflinePlayer player = Bukkit.getOfflinePlayer(input);
+        if (player.hasPlayedBefore() || player.isOnline())
+            return player.getUniqueId();
+
+        return null;
+    }
+
+    private String nameOf(UUID uuid, String fallback) {
+        String name = Bukkit.getOfflinePlayer(uuid).getName();
+        return name != null ? name : fallback;
+    }
+
+    private int[] transferData(UUID fromUUID, UUID toUUID, String toName) {
+        int auctionCount = 0;
+        int bidCount = 0;
+
+        for (Auction auction : AuctionCache.getAuctions().values()) {
+            boolean changed = false;
+
+            // Reassign ownership of the auction itself
+            if (auction.getAuctionOwner().equals(fromUUID)) {
+                auction.setAuctionOwner(toUUID);
+                auction.setAuctionOwnerDisplayName(toName);
+                auctionCount++;
+                changed = true;
+            }
+
+            // Reassign every bid (covers NORMAL bids and BIN purchase records) owned by the source
+            List<PlayerBid> bids = auction.getAuctionBids().getPlayerBids();
+            boolean bidChanged = false;
+            List<PlayerBid> newBids = new ArrayList<>(bids.size());
+            for (PlayerBid bid : bids) {
+                if (bid.getBidOwner().equals(fromUUID)) {
+                    newBids.add(new PlayerBid(bid.getUuid(), toUUID, toName, bid.getBidPrice(), bid.getBidTime(), bid.isCollected()));
+                    bidCount++;
+                    bidChanged = true;
+                } else
+                    newBids.add(bid);
+            }
+            if (bidChanged) {
+                auction.getAuctionBids().addPlayerBids(newBids);
+                changed = true;
+            }
+
+            if (changed) {
+                AuctionCache.addUpdatingAuction(auction.getAuctionUUID());
+                DeluxeAuctions.getInstance().databaseManager.saveAuction(auction);
+            }
+        }
+
+        transferStats(fromUUID, toUUID);
+
+        return new int[]{auctionCount, bidCount};
+    }
+
+    private void transferStats(UUID fromUUID, UUID toUUID) {
+        DatabaseManager db = DeluxeAuctions.getInstance().databaseManager;
+
+        // Source stats: prefer the live cache (online player), otherwise read from disk
+        PlayerStats fromStats = PlayerCache.getStats().get(fromUUID);
+        if (fromStats == null)
+            fromStats = db.loadStatsSync(fromUUID);
+        if (fromStats == null)
+            return; // source has no stats to merge
+
+        // Target stats: prefer the live cache so an online player's object is updated in place
+        PlayerStats toStats = PlayerCache.getStats().get(toUUID);
+        if (toStats == null) {
+            toStats = db.loadStatsSync(toUUID);
+            if (toStats == null)
+                toStats = new PlayerStats(toUUID);
+        }
+
+        toStats.setWonAuctions(toStats.getWonAuctions() + fromStats.getWonAuctions());
+        toStats.setLostAuctions(toStats.getLostAuctions() + fromStats.getLostAuctions());
+        toStats.setTotalBids(toStats.getTotalBids() + fromStats.getTotalBids());
+        toStats.setHighestBid(fromStats.getHighestBid()); // setter keeps the larger value
+        toStats.setSpentMoney(toStats.getSpentMoney() + fromStats.getSpentMoney());
+        toStats.setCreatedAuctions(toStats.getCreatedAuctions() + fromStats.getCreatedAuctions());
+        toStats.setExpiredAuctions(toStats.getExpiredAuctions() + fromStats.getExpiredAuctions());
+        toStats.setSoldAuctions(toStats.getSoldAuctions() + fromStats.getSoldAuctions());
+        toStats.setEarnedMoney(toStats.getEarnedMoney() + fromStats.getEarnedMoney());
+        toStats.setTotalFees(toStats.getTotalFees() + fromStats.getTotalFees());
+
+        db.saveStats(toStats);
+        db.deleteStats(fromUUID);
+        PlayerCache.removeStats(fromUUID);
     }
 }

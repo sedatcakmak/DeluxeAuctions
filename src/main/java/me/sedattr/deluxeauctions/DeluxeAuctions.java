@@ -149,11 +149,22 @@ public class DeluxeAuctions extends JavaPlugin {
     public void onDisable() {
         this.disabled = true;
 
-        if (this.loaded) {
-            DeluxeAuctions.getInstance().databaseManager.saveAuctions();
-            DeluxeAuctions.getInstance().databaseManager.shutdown();
+        // Persistence must never abort the disable sequence. A StackOverflowError from a
+        // malformed auction item (container/bundle bomb) used to escape here, leaving the
+        // database connection open and players' inventories locked.
+        try {
+            if (this.loaded) {
+                DeluxeAuctions.getInstance().databaseManager.saveAuctions();
+                DeluxeAuctions.getInstance().databaseManager.shutdown();
+            }
+        } catch (Throwable t) {
+            Logger.sendConsoleMessage("Failed to save data on shutdown: " + t.getClass().getSimpleName() + " - " + t.getMessage(), Logger.LogLevel.ERROR);
         }
-        this.metrics.shutdown();
+
+        try {
+            this.metrics.shutdown();
+        } catch (Throwable ignored) {
+        }
 
         for (Player player : Bukkit.getOnlinePlayers())
             if (InventoryAPI.hasInventory(player))

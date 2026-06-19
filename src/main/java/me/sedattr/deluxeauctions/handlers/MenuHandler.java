@@ -76,17 +76,23 @@ public class MenuHandler {
         } catch (NoSuchMethodException ignored) {}
     }
 
-    public String getPackTitle(Player player, String menuName, String title) {
+    // Whether this menu's title is being replaced because the player has the resource pack.
+    // Used to skip decorative glass items in pack-themed GUIs.
+    public boolean isPackApplied(Player player, String menuName) {
         if (!this.packCheckEnabled || !this.packCheckSupported || this.packTitles.isEmpty())
-            return title;
+            return false;
         if (player == null || !player.hasResourcePack())
-            return title;
+            return false;
 
         String toName = this.packTitles.get(menuName);
-        if (toName == null || toName.isEmpty())
+        return toName != null && !toName.isEmpty();
+    }
+
+    public String getPackTitle(Player player, String menuName, String title) {
+        if (!isPackApplied(player, menuName))
             return title;
 
-        return Utils.placeholderApi(player, toName);
+        return Utils.placeholderApi(player, this.packTitles.get(menuName));
     }
 
     public void addCustomItems(Player player, HInventory gui, ConfigurationSection section) {
@@ -151,6 +157,10 @@ public class MenuHandler {
         if (closeSlot > 0 && close != null)
             gui.setItem(closeSlot, ClickableItem.of(close, (event) -> player.closeInventory()));
 
+        // Skip decorative glass when the resource pack themes this menu
+        if (isPackApplied(player, section.getName()))
+            return;
+
         List<Integer> glassSlots = section.getIntegerList("glass");
         ItemStack glass = category != null ? category.getGlass() : DeluxeAuctions.getInstance().normalItems.get("glass");
         if (glass == null)
@@ -161,15 +171,16 @@ public class MenuHandler {
             gui.setItem(i, ClickableItem.empty(glass));
     }
     public void addNormalItems(Player player, HInventory gui, ConfigurationSection section) {
-        List<Integer> glassSlots = section.getIntegerList("glass");
-        ItemStack glass = DeluxeAuctions.getInstance().normalItems.get("glass");
-        if (glass == null)
-            return;
-        glass = glass.clone();
-
-        if (!glassSlots.isEmpty())
-            for (int i : glassSlots)
-                gui.setItem(i, ClickableItem.empty(glass));
+        // Skip decorative glass when the resource pack themes this menu
+        if (!isPackApplied(player, section.getName())) {
+            List<Integer> glassSlots = section.getIntegerList("glass");
+            ItemStack glass = DeluxeAuctions.getInstance().normalItems.get("glass");
+            if (glass != null && !glassSlots.isEmpty()) {
+                glass = glass.clone();
+                for (int i : glassSlots)
+                    gui.setItem(i, ClickableItem.empty(glass));
+            }
+        }
 
         int closeSlot = section.getInt("close");
         ItemStack close = DeluxeAuctions.getInstance().normalItems.get("close");

@@ -49,7 +49,14 @@ settings:
   duration_fee: # Duration fee can be customizable
     enabled: true
     minimum_fee: 50 # Duration fee can't be lower than this setting
-    formula: "%hours% * 50" # Current Placeholders: %hours%
+    formula: "%hours% * 50" # Placeholders: %weeks% %days% %hours% %minutes% %seconds%
+    # Per-currency duration fee override. Listed economies use their own formula;
+    # others use the formula above. Value = a formula String, or a section with
+    # its own formula + minimum_fee.
+    # economy_formulas:
+    #   pr_economy:
+    #     formula: "%hours% * 5 / 336" # 336 hours (2 weeks) = 5; shorter is proportionally cheaper
+    #     minimum_fee: 0.0
   auction_flags: # Auctions' example items will have these flags
     - HIDE_ATTRIBUTES
   anti_lag: # With this system, you can prevent dupe problems a bit.
@@ -119,6 +126,11 @@ bin_auction:
     0: 1
     500000: 2.5
     1000000: 5
+  # Per-currency fee override (PERCENT). Listed economies use their own rate
+  # instead of price_fees above. A single number = flat percent; you may also
+  # use a price-range section just like price_fees.
+  # economy_fees:
+  #   pr_economy: 10.0
 
 # NORMAL AUCTION SETTINGS
 normal_auction:
@@ -129,6 +141,9 @@ normal_auction:
   # 0 and higher: 1%
   price_fees: # PERCENT.
     0: 1
+  # Per-currency fee override (PERCENT). See bin_auction.economy_fees above.
+  # economy_fees:
+  #   pr_economy: 10.0
 
 # AUCTION LIMITS
 player_limits:
@@ -288,6 +303,7 @@ permissions:
     lock: "auctionadmin.lock"
     menu: "auctionadmin.menu"
     reload: "auctionadmin.reload"
+    transfer: "auctionadmin.transfer"
 
 # PLUGIN COMMAND ARGS
 commands:
@@ -295,6 +311,8 @@ commands:
     - search
   convert:
     - convert
+  transfer:
+    - transfer
   cancel:
     - cancel
   lock:

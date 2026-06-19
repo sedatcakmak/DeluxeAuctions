@@ -1129,6 +1129,9 @@ economy_menu:
   glass: [1,2,3,4,5,6,7,8,9,10,18,19,20,21,24,25,26,27]
   close: 23
   back: 22
+  # The lore line searched in each economy item; replaced with selected_text for the currently selected currency.
+  unselected_text: "&eClick to select!"
+  selected_text: "&bCurrently selected!"
 
 duration_menu:
   title: "&8Auction Duration"

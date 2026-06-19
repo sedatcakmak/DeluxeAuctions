@@ -27,8 +27,8 @@ public class Auction {
     private final AuctionBids auctionBids = new AuctionBids();
     private final Economy economy;
 
-    private UUID auctionOwner;
-    private String auctionOwnerDisplayName;
+    @Setter private UUID auctionOwner;
+    @Setter private String auctionOwnerDisplayName;
     private long auctionStartTime;
 
     private ItemStack auctionItem;
@@ -85,6 +85,14 @@ public class Auction {
 
         this.auctionCategory = CategoryCache.getItemCategory(item);
         if (this.auctionCategory.isEmpty()) {
+            Utils.sendMessage(player, "unsellable_item");
+            return false;
+        }
+
+        // Reject deeply-nested container items (shulker/bundle "bombs"): they overflow the NBT
+        // codec on save and used to crash plugin shutdown. Treated as unsellable.
+        if (Utils.isItemTooComplex(item)) {
+            DeluxeAuctions.getInstance().dataHandler.debug("Player (" + player.getUniqueId() + ") tried to list an over-nested item; rejected.");
             Utils.sendMessage(player, "unsellable_item");
             return false;
         }

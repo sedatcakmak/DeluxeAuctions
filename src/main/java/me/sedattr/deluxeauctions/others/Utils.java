@@ -18,6 +18,7 @@ import org.bukkit.util.io.BukkitObjectInputStream;
 import org.bukkit.util.io.BukkitObjectOutputStream;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.yaml.snakeyaml.external.biz.base64Coder.Base64Coder;
 
 import java.io.ByteArrayInputStream;
@@ -145,18 +146,38 @@ public class Utils {
         return hex(s);
     }
 
-    public static String itemToBase64(ItemStack item) {
-        try {
-            if (item == null)
-                return "";
+    // Component.text(legacyString) embeds Spigot's §x§R§R§G§G§B§B hex sequences as literal text.
+    // The vanilla client doesn't understand §x, so it parses each §<nibble> on its own and the
+    // LAST nibble wins -- a hex display name collapses to a single legacy color. Deserialize
+    // through a hex-aware legacy serializer instead so real hex colors reach the client.
+    private static final LegacyComponentSerializer LEGACY_HEX_SERIALIZER = LegacyComponentSerializer.builder()
+            .hexColors()
+            .useUnusualXRepeatedCharacterHexFormat()
+            .build();
 
+    public static Component toComponent(String legacy) {
+        if (legacy == null || legacy.isEmpty())
+            return Component.empty();
+
+        return LEGACY_HEX_SERIALIZER.deserialize(legacy);
+    }
+
+    public static String itemToBase64(ItemStack item) {
+        if (item == null)
+            return "";
+
+        try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             BukkitObjectOutputStream dataOutput = new BukkitObjectOutputStream(outputStream);
 
             dataOutput.writeObject(item);
             dataOutput.close();
             return Base64Coder.encodeLines(outputStream.toByteArray());
-        } catch (Exception e) {
+        } catch (Throwable e) {
+            // Catch Throwable, not Exception: deeply-nested items (shulker/bundle "container
+            // bombs") overflow the NBT codec with a StackOverflowError, which is an Error and
+            // would otherwise escape, abort the whole save batch and crash plugin shutdown.
+            Logger.sendConsoleMessage("Item could not be serialized (" + item.getType() + "): " + e.getClass().getSimpleName(), Logger.LogLevel.WARN);
             return "";
         }
     }
@@ -189,10 +210,61 @@ public class Utils {
                 return null;
 
             return item;
-        } catch (Exception e) {
-            Logger.sendConsoleMessage("Base64 deserialization error: " + e.getMessage(), Logger.LogLevel.WARN);
+        } catch (Throwable e) {
+            // Throwable, not Exception: a crafted nested item can overflow the codec on load
+            // too. Skip the single bad row instead of aborting the whole auction load.
+            Logger.sendConsoleMessage("Base64 deserialization error: " + e.getClass().getSimpleName(), Logger.LogLevel.WARN);
             return null;
         }
+    }
+
+    // A crafted item can nest containers (shulker boxes, bundles) hundreds of levels deep.
+    // Serializing it overflows the NBT codec with a StackOverflowError, so it must be rejected
+    // before it ever enters an auction. Limits sit far above anything legitimate gameplay can
+    // build (vanilla can't even nest a shulker inside a shulker).
+    private static final int MAX_CONTAINER_DEPTH = 5;
+    private static final int MAX_CONTAINER_NODES = 512;
+
+    public static boolean isItemTooComplex(ItemStack item) {
+        if (item == null)
+            return false;
+
+        try {
+            ArrayDeque<AbstractMap.SimpleEntry<ItemStack, Integer>> queue = new ArrayDeque<>();
+            queue.add(new AbstractMap.SimpleEntry<>(item, 0));
+            int nodes = 0;
+
+            while (!queue.isEmpty()) {
+                AbstractMap.SimpleEntry<ItemStack, Integer> entry = queue.poll();
+                ItemStack current = entry.getKey();
+                int depth = entry.getValue();
+                if (current == null || current.getType() == Material.AIR)
+                    continue;
+
+                if (depth > MAX_CONTAINER_DEPTH || ++nodes > MAX_CONTAINER_NODES)
+                    return true;
+
+                ItemMeta meta = current.getItemMeta();
+                if (meta == null)
+                    continue;
+
+                if (meta instanceof org.bukkit.inventory.meta.BundleMeta bundleMeta) {
+                    for (ItemStack inner : bundleMeta.getItems())
+                        queue.add(new AbstractMap.SimpleEntry<>(inner, depth + 1));
+                } else if (meta instanceof org.bukkit.inventory.meta.BlockStateMeta stateMeta && stateMeta.hasBlockState()) {
+                    org.bukkit.block.BlockState state = stateMeta.getBlockState();
+                    if (state instanceof org.bukkit.block.Container container)
+                        for (ItemStack inner : container.getInventory().getContents())
+                            queue.add(new AbstractMap.SimpleEntry<>(inner, depth + 1));
+                }
+            }
+        } catch (Throwable t) {
+            // Never block a listing because detection itself failed (e.g. a very old server
+            // without BundleMeta). The serialize-side guard still protects shutdown.
+            return false;
+        }
+
+        return false;
     }
 
     public static String replacePlaceholders(String message, PlaceholderUtil placeholderUtil) {
@@ -325,10 +397,10 @@ public class Utils {
             String hover = section.getString(type + ".hover");
             String clickType = section.getString(type + ".type", "SUGGEST_COMMAND");
 
-            Component base = Component.text(Utils.colorize(Utils.replacePlaceholders(message, placeholderUtil)));
+            Component base = Utils.toComponent(Utils.colorize(Utils.replacePlaceholders(message, placeholderUtil)));
 
             if (hover != null && !hover.isEmpty()) {
-                Component hoverComp = Component.text(Utils.colorize(Utils.replacePlaceholders(hover, placeholderUtil)));
+                Component hoverComp = Utils.toComponent(Utils.colorize(Utils.replacePlaceholders(hover, placeholderUtil)));
                 base = base.hoverEvent(HoverEvent.showText(hoverComp));
             }
 

@@ -55,7 +55,7 @@ public class DurationMenu implements MenuManager {
 
             int time = durationSection.getInt("duration", 86400);
             PlaceholderUtil placeholderUtil = new PlaceholderUtil()
-                    .addPlaceholder("%duration_fee%", this.playerAuction.getCreateEconomy().getText().replace("%price%", DeluxeAuctions.getInstance().numberFormat.format(AuctionHook.calculateDurationFee(time))));
+                    .addPlaceholder("%duration_fee%", this.playerAuction.getCreateEconomy().getText().replace("%price%", DeluxeAuctions.getInstance().numberFormat.format(AuctionHook.calculateDurationFee(time, this.playerAuction.getCreateEconomy()))));
 
             ItemStack itemStack = Utils.createItemFromSection(durationSection, placeholderUtil);
             if (itemStack == null)
