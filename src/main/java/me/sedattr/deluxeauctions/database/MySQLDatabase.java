@@ -25,6 +25,13 @@ public class MySQLDatabase implements DatabaseManager {
     private String link;
     private String url;
 
+    // Guards connection rebuilds so two async tasks can't race to swap the shared handle.
+    private final Object connectionLock = new Object();
+    // Last time the live connection was confirmed valid; throttles the isValid() ping.
+    private volatile long lastValidated;
+    // Re-validate an idle connection at most this often instead of pinging on every query.
+    private static final long VALIDATE_INTERVAL_MS = 30_000L;
+
     private String auctions;
     private String items;
     private String stats;
@@ -201,17 +208,61 @@ public class MySQLDatabase implements DatabaseManager {
     }
 
     public Connection getConnection() {
-        try {
-            if (isConnected())
+        synchronized (this.connectionLock) {
+            try {
+                if (connectionUsable())
+                    return this.connection;
+
+                // The cached handle is null, locally closed, or was silently dropped by the
+                // server after wait_timeout. isClosed() never reports a server-side drop, so a
+                // stale socket would otherwise be handed out and fail on the next statement
+                // (CommunicationsException). Discard it and open a fresh connection.
+                closeQuietly(this.connection);
+
+                Class.forName(this.link != null && !this.link.isEmpty() ? this.link : "com.mysql.jdbc.Driver");
+                this.connection = DriverManager.getConnection(this.url, this.user, this.password);
+                this.lastValidated = System.currentTimeMillis();
                 return this.connection;
+            } catch (SQLException | ClassNotFoundException throwable) {
+                throwable.printStackTrace();
+            }
 
-            Class.forName(this.link != null && !this.link.isEmpty() ? this.link : "com.mysql.jdbc.Driver");
-            return this.connection = DriverManager.getConnection(this.url, this.user, this.password);
-        } catch (SQLException | ClassNotFoundException throwable) {
-            throwable.printStackTrace();
+            return null;
         }
+    }
 
-        return null;
+    // Validates the cached connection before reuse. Unlike isClosed(), isValid() actually
+    // probes the server, which is the only reliable way to detect a wait_timeout drop. The
+    // probe is throttled to once per VALIDATE_INTERVAL_MS so busy periods don't add a round
+    // trip to every query.
+    private boolean connectionUsable() {
+        if (this.connection == null)
+            return false;
+
+        try {
+            if (this.connection.isClosed())
+                return false;
+
+            if (System.currentTimeMillis() - this.lastValidated < VALIDATE_INTERVAL_MS)
+                return true;
+
+            boolean valid = this.connection.isValid(2);
+            if (valid)
+                this.lastValidated = System.currentTimeMillis();
+            return valid;
+        } catch (SQLException e) {
+            return false;
+        }
+    }
+
+    private void closeQuietly(Connection connection) {
+        if (connection == null)
+            return;
+
+        try {
+            connection.close();
+        } catch (SQLException ignored) {
+        }
     }
 
     public boolean isConnected() {

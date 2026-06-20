@@ -44,7 +44,7 @@ public class ConfigUpdater {
     private static void write(FileConfiguration defaultConfig, FileConfiguration currentConfig, BufferedWriter writer, Map<String, String> comments, Map<String, String> ignoredSectionsValues) throws IOException {
         FileConfiguration parserConfig = new YamlConfiguration();
 
-       for (String fullKey : defaultConfig.getKeys(true)) {
+       for (String fullKey : getMergedKeys(defaultConfig, currentConfig)) {
             String indents = KeyUtils.getIndents(fullKey, SEPARATOR);
 
            if (!ignoredSectionsValues.isEmpty()) {
@@ -76,6 +76,36 @@ public class ConfigUpdater {
             writer.write(danglingComments);
 
         writer.close();
+    }
+
+    // Build the ordered list of keys to write: every key from the bundled default
+    // (so its order and comments are preserved) PLUS any key the user added that the
+    // default doesn't define. The original code walked only defaultConfig.getKeys(true),
+    // which silently dropped user-added keys (e.g. per-currency economy_fees /
+    // economy_formulas) on every update. Walking the union keeps them intact.
+    private static List<String> getMergedKeys(ConfigurationSection defaultConfig, ConfigurationSection currentConfig) {
+        List<String> keys = new ArrayList<>();
+        collectKeys(defaultConfig, currentConfig, "", keys);
+        return keys;
+    }
+
+    private static void collectKeys(ConfigurationSection defaultSection, ConfigurationSection currentSection, String parent, List<String> keys) {
+        // Default keys first (keeps default ordering), then any user-only keys appended.
+        LinkedHashSet<String> childKeys = new LinkedHashSet<>();
+        if (defaultSection != null)
+            childKeys.addAll(defaultSection.getKeys(false));
+        if (currentSection != null)
+            childKeys.addAll(currentSection.getKeys(false));
+
+        for (String child : childKeys) {
+            String fullKey = parent.isEmpty() ? child : parent + SEPARATOR + child;
+            keys.add(fullKey);
+
+            ConfigurationSection defaultChild = defaultSection != null ? defaultSection.getConfigurationSection(child) : null;
+            ConfigurationSection currentChild = currentSection != null ? currentSection.getConfigurationSection(child) : null;
+            if (defaultChild != null || currentChild != null)
+                collectKeys(defaultChild, currentChild, fullKey, keys);
+        }
     }
 
     private static Map<String, String> parseComments(Plugin plugin, String resourceName, FileConfiguration defaultConfig) throws IOException {
