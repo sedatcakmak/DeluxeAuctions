@@ -36,6 +36,16 @@ public class MySQLDatabase implements DatabaseManager {
     private String items;
     private String stats;
 
+    // Read by name: the column is appended by a migration, so its position depends on the
+    // table's history. Rows written before it existed (or by an older build) read as 0.
+    private static long readDuration(ResultSet set) {
+        try {
+            return set.getLong("duration");
+        } catch (SQLException ignored) {
+            return 0L;
+        }
+    }
+
     private void load(ResultSet set) throws SQLException {
         long endTime = set.getLong(7);
         String auctionUUID = set.getString(1);
@@ -59,8 +69,10 @@ public class MySQLDatabase implements DatabaseManager {
         AuctionType type = AuctionType.valueOf(set.getString(8));
         boolean isClaimed = set.getBoolean(9);
         String economy = set.getString(10);
+        long duration = readDuration(set);
 
         Auction auction = new Auction(uuid, owner, displayName, item, price, type, economy, endTime, isClaimed);
+        auction.setAuctionDuration(duration);
         if (auction.getAuctionCategory().isEmpty()) {
             AuctionCache.removeUpdatingAuction(uuid);
             return;
@@ -159,7 +171,8 @@ public class MySQLDatabase implements DatabaseManager {
                                 "end_time INT(11), " +
                                 "type TEXT, " +
                                 "claimed BOOL, " +
-                                "economy TEXT);");
+                                "economy TEXT, " +
+                        "duration BIGINT DEFAULT 0);");
 
                 PreparedStatement statement2 = connection
                         .prepareStatement("CREATE TABLE IF NOT EXISTS " + this.items + " (" +
@@ -202,6 +215,24 @@ public class MySQLDatabase implements DatabaseManager {
 
         } catch (SQLException e) {
             e.printStackTrace();
+        }
+
+        // Listing duration, used to relist an expired auction for the same length of time.
+        try {
+            Connection connection = getConnection();
+            if (connection != null)
+                try (PreparedStatement checkColumn = connection.prepareStatement("SHOW COLUMNS FROM " + this.auctions + " LIKE 'duration';");
+                     ResultSet resultSet = checkColumn.executeQuery()) {
+                    if (!resultSet.next())
+                        try (PreparedStatement addColumn = connection.prepareStatement("ALTER TABLE " + this.auctions + " ADD COLUMN duration BIGINT DEFAULT 0;")) {
+                            addColumn.executeUpdate();
+                            DeluxeAuctions.getInstance().dataHandler.debug("Column 'duration' has been added to " + this.auctions + " table.");
+                        }
+                }
+        } catch (SQLException e) {
+            // Another server sharing this database may have added it a moment earlier.
+            if (e.getMessage() == null || !e.getMessage().toLowerCase().contains("duplicate"))
+                e.printStackTrace();
         }
 
         DeluxeAuctions.getInstance().dataHandler.debug("MySQL is connected!");
@@ -432,7 +463,7 @@ public class MySQLDatabase implements DatabaseManager {
     // SAVE FUNCTIONS
     public void saveAuctions() {
         String sql = "REPLACE INTO " + this.auctions
-                + " (uuid, owner, display_name, item, bids, price, end_time, type, claimed, economy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+                + " (uuid, owner, display_name, item, bids, price, end_time, type, claimed, economy, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
         runTask(() -> {
             Connection connection = getConnection();
             if (connection == null)
@@ -484,6 +515,7 @@ public class MySQLDatabase implements DatabaseManager {
                     statement.setString(8, auction.getAuctionType().name());
                     statement.setBoolean(9, auction.isSellerClaimed());
                     statement.setString(10, auction.getEconomy().getKey());
+                    statement.setLong(11, auction.getAuctionDuration());
 
                     statement.addBatch();
                     saved++;
@@ -521,7 +553,7 @@ public class MySQLDatabase implements DatabaseManager {
 
     public void saveAuction(Auction auction) {
         String sql = "REPLACE INTO " + this.auctions
-                + " (uuid, owner, display_name, item, bids, price, end_time, type, claimed, economy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                + " (uuid, owner, display_name, item, bids, price, end_time, type, claimed, economy, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         runTask(() -> {
             StringBuilder playerBids = new StringBuilder();
             List<PlayerBid> bids = auction.getAuctionBids().getPlayerBids();
@@ -553,6 +585,7 @@ public class MySQLDatabase implements DatabaseManager {
                 statement.setString(8, auction.getAuctionType().name());
                 statement.setBoolean(9, auction.isSellerClaimed());
                 statement.setString(10, auction.getEconomy().getKey());
+                statement.setLong(11, auction.getAuctionDuration());
 
                 statement.execute();
 

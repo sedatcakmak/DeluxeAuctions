@@ -428,6 +428,8 @@ pack-check:
       to-name: ""
     manage_auctions:
       to-name: ""
+    relist_auctions:
+      to-name: ""
     view_bids:
       to-name: ""
     economy_menu:

@@ -25,6 +25,16 @@ public class SQLiteDatabase implements DatabaseManager {
     private String items;
     private String stats;
 
+    // Read by name: the column is appended by a migration, so its position depends on the
+    // table's history. Rows written before it existed (or by an older build) read as 0.
+    private static long readDuration(ResultSet set) {
+        try {
+            return set.getLong("duration");
+        } catch (SQLException ignored) {
+            return 0L;
+        }
+    }
+
     private void load(ResultSet set) throws SQLException {
         long endTime = set.getLong(7);
         String auctionUUID = set.getString(1);
@@ -48,8 +58,10 @@ public class SQLiteDatabase implements DatabaseManager {
         AuctionType type = AuctionType.valueOf(set.getString(8));
         boolean isClaimed = set.getBoolean(9);
         String economy = set.getString(10);
+        long duration = readDuration(set);
 
         Auction auction = new Auction(uuid, owner, displayName, item, price, type, economy, endTime, isClaimed);
+        auction.setAuctionDuration(duration);
         if (auction.getAuctionCategory().isEmpty()) {
             AuctionCache.removeUpdatingAuction(uuid);
             return;
@@ -155,7 +167,8 @@ public class SQLiteDatabase implements DatabaseManager {
                         "end_time INT(11), " +
                         "type TEXT, " +
                         "claimed BOOL, " +
-                        "economy TEXT);");
+                        "economy TEXT, " +
+                        "duration BIGINT DEFAULT 0);");
 
                 PreparedStatement statement2 = this.connection.prepareStatement("CREATE TABLE IF NOT EXISTS " + this.items + " (" +
                         "uuid VARCHAR(36) PRIMARY KEY, " +
@@ -203,6 +216,30 @@ public class SQLiteDatabase implements DatabaseManager {
                 }
             }
 
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        // Listing duration, used to relist an expired auction for the same length of time.
+        try {
+            Connection connection = getConnection();
+            if (connection != null) {
+                boolean durationExists = false;
+                try (PreparedStatement checkColumn = connection.prepareStatement("PRAGMA table_info(" + this.auctions + ");");
+                     ResultSet resultSet = checkColumn.executeQuery()) {
+                    while (resultSet.next())
+                        if ("duration".equalsIgnoreCase(resultSet.getString("name"))) {
+                            durationExists = true;
+                            break;
+                        }
+                }
+
+                if (!durationExists)
+                    try (PreparedStatement addColumn = connection.prepareStatement("ALTER TABLE " + this.auctions + " ADD COLUMN duration BIGINT DEFAULT 0;")) {
+                        addColumn.executeUpdate();
+                        DeluxeAuctions.getInstance().dataHandler.debug("Column 'duration' has been added to " + this.auctions + " table.");
+                    }
+            }
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -369,7 +406,7 @@ public class SQLiteDatabase implements DatabaseManager {
     }
 
     public void saveAuctions() {
-        String sql = "REPLACE INTO " + this.auctions + " (uuid, owner, display_name, item, bids, price, end_time, type, claimed, economy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+        String sql = "REPLACE INTO " + this.auctions + " (uuid, owner, display_name, item, bids, price, end_time, type, claimed, economy, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
         runTask(() -> {
             Connection connection = getConnection();
             if (connection == null)
@@ -421,6 +458,7 @@ public class SQLiteDatabase implements DatabaseManager {
                     statement.setString(8, auction.getAuctionType().name());
                     statement.setBoolean(9, auction.isSellerClaimed());
                     statement.setString(10, auction.getEconomy().getKey());
+                    statement.setLong(11, auction.getAuctionDuration());
 
                     statement.addBatch();
                     saved++;
@@ -456,7 +494,7 @@ public class SQLiteDatabase implements DatabaseManager {
     }
 
     public void saveAuction(Auction auction) {
-        String sql = "REPLACE INTO " + this.auctions + " (uuid, owner, display_name, item, bids, price, end_time, type, claimed, economy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+        String sql = "REPLACE INTO " + this.auctions + " (uuid, owner, display_name, item, bids, price, end_time, type, claimed, economy, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
         runTask(() -> {
             StringBuilder playerBids = new StringBuilder();
             List<PlayerBid> bids = auction.getAuctionBids().getPlayerBids();
@@ -488,6 +526,7 @@ public class SQLiteDatabase implements DatabaseManager {
                 statement.setString(8, auction.getAuctionType().name());
                 statement.setBoolean(9, auction.isSellerClaimed());
                 statement.setString(10, auction.getEconomy().getKey());
+                statement.setLong(11, auction.getAuctionDuration());
 
                 statement.execute();
 

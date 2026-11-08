@@ -64,6 +64,7 @@ public class ManageMenu {
         loadCreateAuctionItem();
         loadSorterItem();
         loadClaimAll();
+        loadRelistItem();
 
         if (this.section.getBoolean("pagination")) {
             if (getTotalPage() > page) {
@@ -258,6 +259,30 @@ public class ManageMenu {
 
             i++;
         }
+    }
+
+    private void loadRelistItem() {
+        ConfigurationSection itemSection = this.section.getConfigurationSection("relist");
+        if (itemSection == null || !RelistMenu.isEnabled())
+            return;
+
+        int expired = RelistMenu.getRelistable(this.player.getUniqueId()).size();
+        ConfigurationSection buttonSection = itemSection.getConfigurationSection(expired > 0 ? "with_expired" : "without_expired");
+        if (buttonSection == null)
+            return;
+
+        ItemStack itemStack = Utils.createItemFromSection(buttonSection, new PlaceholderUtil()
+                .addPlaceholder("%expired_items%", String.valueOf(expired)));
+        if (itemStack == null)
+            return;
+
+        int slot = buttonSection.getInt("slot");
+        if (expired <= 0) {
+            this.gui.setItem(slot, ClickableItem.empty(itemStack));
+            return;
+        }
+
+        this.gui.setItem(slot, ClickableItem.of(itemStack, (event) -> new RelistMenu(this.player).open(1, this.back)));
     }
 
     private void loadCreateAuctionItem() {

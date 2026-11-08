@@ -999,7 +999,7 @@ confirm_bid:
 manage_auctions:
   title: "&8Manage Auctions"
   size: 45
-  glass: [1,2,3,4,5,6,7,8,9,10,18,19,27,28,36,37,38,43,44,45]
+  glass: [1,2,3,4,5,6,7,8,9,10,18,19,27,28,36,37,38,43,45]
   slots: [11,12,13,14,15,16,17,20,21,22,23,24,25,26,29,30,31,32,33,34,35]
   close: 41
   back: 40
@@ -1044,6 +1044,33 @@ manage_auctions:
       - "&7for other players to purchase!"
       - ""
       - "&dClick to sell your items!"
+  # Relist every expired, unsold auction in one click (preview menu: relist_auctions).
+  # %expired_items% -> number of auctions that can be relisted
+  relist:
+    with_expired:
+      material: SUNFLOWER
+      data: 0
+      slot: 44
+      name: "&aRelist Expired Auctions"
+      lore:
+        - "&7Put your expired, unsold items"
+        - "&7back on sale for the same price"
+        - "&7and duration in one click."
+        - ""
+        - "&7Can be relisted: &a%expired_items% items"
+        - ""
+        - "&eClick to preview!"
+    without_expired:
+      material: SUNFLOWER
+      data: 0
+      slot: 44
+      name: "&aRelist Expired Auctions"
+      lore:
+        - "&7Put your expired, unsold items"
+        - "&7back on sale for the same price"
+        - "&7and duration in one click."
+        - ""
+        - "&cYou have no expired items!"
   auction_sorter:
     material: HOPPER
     data: 0
@@ -1095,6 +1122,90 @@ manage_auctions:
       - ""
       - "&bRight click to skip pages!"
       - "&eClick to go back to next menu!"
+
+# RELIST EXPIRED AUCTIONS
+# Opened from the "relist" button in manage_auctions. Price, type and economy come from the
+# expired auction; the duration is the auction's own duration (settings.default_duration for
+# auctions saved before durations were stored). Fees are the same as creating it from scratch.
+# Clicking a listing leaves it out / adds it back. The confirm button sums everything up.
+#   Listing lore:   %auction_price% %auction_time% %auction_type% %auction_fee% %item_amount%
+#   Confirm button: %relist_items% (one line per item), %relist_fees% (one line per currency), %relist_amount%
+relist_auctions:
+  title: "&8Relist Auctions"
+  size: 45
+  glass: [1,2,3,4,5,6,7,8,9,10,18,19,27,28,36,37,38,39,43,44,45]
+  slots: [11,12,13,14,15,16,17,20,21,22,23,24,25,26,29,30,31,32,33,34,35]
+  close: 41
+  back: 40
+  pagination: true
+  types:
+    bin: "&bBIN"
+    normal: "&dAuction"
+  listing_lore:
+    included:
+      - ""
+      - "&8&l▶ &7Price: &6%auction_price%"
+      - "&8&l▶ &7Duration: &e%auction_time%"
+      - "&8&l▶ &7Type: %auction_type%"
+      - "&8&l▶ &7Fee: &6%auction_fee%"
+      - ""
+      - "&aThis item will be relisted."
+      - "&eClick to leave it out!"
+    excluded:
+      - ""
+      - "&8&l▶ &7Price: &6%auction_price%"
+      - "&8&l▶ &7Duration: &e%auction_time%"
+      - ""
+      - "&cThis item will not be relisted."
+      - "&eClick to add it back!"
+  confirm:
+    max_item_lines: 8
+    item_line: "&8• &f%item_displayname% &7x%item_amount% &8| &6%auction_price% &8| &e%auction_time%"
+    more_line: "&8...and &7%amount% &8more"
+    fee_line: "&8• &6%fee%"
+    free_line: "&8• &aFree"
+    with_selected:
+      material: LIME_TERRACOTTA
+      data: 5
+      slot: 42
+      name: "&aRelist"
+      lore:
+        - "&7These items will be put on sale:"
+        - "%relist_items%"
+        - ""
+        - "&7Total creation fee:"
+        - "%relist_fees%"
+        - ""
+        - "&eClick to confirm!"
+    without_selected:
+      material: GRAY_TERRACOTTA
+      data: 7
+      slot: 42
+      name: "&cRelist"
+      lore:
+        - "&7No item is selected."
+        - "&7Click the items you want"
+        - "&7to relist to select them."
+  next_page:
+    material: ARROW
+    data: 0
+    slot: 45
+    name: "&aNext Page"
+    lore:
+      - "&7(%current_page%/%total_page%)"
+      - ""
+      - "&bRight-click to skip pages!"
+      - "&eClick to go to the next page!"
+  previous_page:
+    material: ARROW
+    data: 0
+    slot: 37
+    name: "&aPrevious Page"
+    lore:
+      - "&7(%current_page%/%total_page%)"
+      - ""
+      - "&bRight-click to skip pages!"
+      - "&eClick to go to the previous page!"
 
 view_bids:
   title: "&8View Bids"

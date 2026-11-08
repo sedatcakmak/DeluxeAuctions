@@ -111,6 +111,14 @@ command_cooldown: "&8[&cAuctions&8] &7Please wait a moment while using auction c
 
 reached_bid_limit: "&8[&cAuctions&8] &7You reached your bid limit!"
 reached_auction_limit: "&8[&cAuctions&8] &7You reached your auction limit!"
+relisted: "&8[&aAuctions&8] &a%amount% &7of your items were put back on sale!"
+relist_some_failed: "&8[&cAuctions&8] &c%amount% &7items could not be relisted."
+relist_nothing: "&8[&cAuctions&8] &7You have no expired items to relist!"
+relist_not_enough_money: "&8[&cAuctions&8] &7You need &6%required_money% &7more to relist these!"
+relist_not_expired: "&8[&cAuctions&8] &7This auction has not expired or was already collected!"
+relist_disabled_type: "&8[&cAuctions&8] &7This auction type is currently disabled!"
+relist_price_limit: "&8[&cAuctions&8] &7This item's price is above your price limit!"
+relist_failed: "&8[&cAuctions&8] &7The item could not be relisted!"
 reached_duration_limit: "&8[&cAuctions&8] &7You reached your duration limit! (Maximum: &f%duration_limit%&7)"
 reached_price_limit: "&8[&cAuctions&8] &7You reached your auction limit! (Maximum: &f%price_limit%&7)"
 

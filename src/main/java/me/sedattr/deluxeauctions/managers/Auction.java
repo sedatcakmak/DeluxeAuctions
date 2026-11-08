@@ -2,6 +2,7 @@ package me.sedattr.deluxeauctions.managers;
 
 import lombok.Getter;
 import lombok.Setter;
+import me.sedattr.auctionsapi.AuctionHook;
 import me.sedattr.deluxeauctions.DeluxeAuctions;
 import me.sedattr.auctionsapi.events.*;
 import me.sedattr.auctionsapi.cache.AuctionCache;
@@ -35,6 +36,9 @@ public class Auction {
     private String auctionCategory;
     @Setter private long auctionEndTime;
     @Setter private boolean sellerClaimed = false;
+    // Listing length in seconds as chosen at creation. Persisted so an expired auction can be
+    // relisted for the same duration; 0 means unknown (rows saved before the column existed).
+    @Setter private long auctionDuration;
 
     public Auction(Economy economy, Double price, AuctionType type, long time) {
         this.auctionUUID = UUID.randomUUID();
@@ -43,6 +47,7 @@ public class Auction {
         this.auctionType = type;
         this.auctionStartTime = ZonedDateTime.now().toInstant().getEpochSecond();
         this.auctionEndTime = this.auctionStartTime + time;
+        this.auctionDuration = time;
     }
 
     public Auction(UUID uuid, UUID owner, String displayName, ItemStack item, Double price, AuctionType type, String economy, long end, boolean sellerClaimed) {
@@ -131,6 +136,108 @@ public class Auction {
         DeluxeAuctions.getInstance().databaseManager.saveAuction(this);
         DeluxeAuctions.getInstance().databaseManager.saveStats(stats);
         return true;
+    }
+
+    /**
+     * Whether this auction ran out without a single bid or purchase and the seller has not taken
+     * the item back yet: the only state in which it can be relisted.
+     */
+    public boolean isExpiredUnsold() {
+        return !this.sellerClaimed
+                && this.auctionBids.getPlayerBids().isEmpty()
+                && ZonedDateTime.now().toInstant().getEpochSecond() > this.auctionEndTime;
+    }
+
+    /**
+     * Puts an expired, unsold auction back on sale in place: same UUID, item, price, type and
+     * economy, with a fresh start/end time. The item never leaves the database row, so there is
+     * no window in which it exists both in the player's inventory and on the auction house.
+     *
+     * @return empty string on success, otherwise the messages.yml key explaining the failure
+     */
+    public synchronized String relist(Player player, long duration, double totalFee) {
+        if (AuctionCache.getAuction(this.auctionUUID) == null)
+            return "refreshing";
+
+        if (!player.getUniqueId().equals(this.auctionOwner))
+            return "relist_not_expired";
+
+        if (!isExpiredUnsold())
+            return "relist_not_expired";
+
+        if (duration <= 0 || !Double.isFinite(totalFee) || totalFee < 0
+                || !Double.isFinite(this.auctionPrice) || this.auctionPrice <= 0)
+            return "wrong_price";
+
+        if (this.auctionItem == null || this.auctionItem.getType().equals(Material.AIR))
+            return "item_not_found";
+
+        if (AuctionHook.isAuctionTypeDisabled(this.auctionType.name()))
+            return "relist_disabled_type";
+
+        if (this.auctionPrice > AuctionHook.getPriceLimit(player, "price_limit"))
+            return "relist_price_limit";
+
+        String sellable = AuctionHook.isSellable(player, this.auctionItem);
+        if (!sellable.isEmpty())
+            return sellable;
+
+        if (Utils.isItemTooComplex(this.auctionItem))
+            return "unsellable_item";
+
+        if (Utils.isLaggy(player))
+            return "laggy";
+
+        if (AuctionCache.isAuctionUpdating(this.auctionUUID))
+            return "refreshing";
+
+        if (DeluxeAuctions.getInstance().multiServerManager != null && DeluxeAuctions.getInstance().multiServerManager.isAuctionUpdating(this.auctionUUID))
+            return "refreshing";
+
+        if (this.economy.getManager().getBalance(player) < totalFee)
+            return "relist_not_enough_money";
+
+        AuctionCache.addUpdatingAuction(this.auctionUUID);
+
+        // Listeners see the auction as it will be listed (a fresh create has its end time set
+        // before the event too): e.g. the Skript check that a listing must not outlive an
+        // expiring item compares against auctionEndTime. Rolled back if anything refuses.
+        long oldStartTime = this.auctionStartTime;
+        long oldEndTime = this.auctionEndTime;
+        long now = ZonedDateTime.now().toInstant().getEpochSecond();
+        this.auctionStartTime = now;
+        this.auctionEndTime = now + duration;
+
+        AuctionCreateEvent event = new AuctionCreateEvent(player, this);
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) {
+            this.auctionStartTime = oldStartTime;
+            this.auctionEndTime = oldEndTime;
+            AuctionCache.removeUpdatingAuction(this.auctionUUID);
+            return "relist_failed";
+        }
+
+        if (totalFee > 0 && !this.economy.getManager().removeBalance(player, totalFee)) {
+            this.auctionStartTime = oldStartTime;
+            this.auctionEndTime = oldEndTime;
+            AuctionCache.removeUpdatingAuction(this.auctionUUID);
+            return "relist_not_enough_money";
+        }
+
+        this.auctionDuration = duration;
+        this.auctionOwnerDisplayName = !player.getDisplayName().isEmpty() ? player.getDisplayName() : player.getName();
+
+        PlayerStats stats = PlayerCache.getStats(this.auctionOwner);
+        stats.addCreatedAuction();
+        stats.addTotalFees(totalFee);
+
+        DeluxeAuctions.getInstance().dataHandler.writeToLog("[PLAYER RELISTED AUCTION] " + player.getName() + " (" + player.getUniqueId() + ") relisted " + this.auctionType + " auction for " + Utils.getDisplayName(this.auctionItem) + " (" + this.auctionUUID + ") at " + this.auctionPrice + " for " + duration + "s, fee " + totalFee + "!");
+        DeluxeAuctions.getInstance().dataHandler.debug("Player (" + player.getUniqueId() + ") relisted auction (" + this.auctionUUID + ")!");
+
+        // saveAuction clears the updating flag and tells the other servers to reload this row.
+        DeluxeAuctions.getInstance().databaseManager.saveAuction(this);
+        DeluxeAuctions.getInstance().databaseManager.saveStats(stats);
+        return "";
     }
 
     public boolean isEnded() {
