@@ -3,6 +3,7 @@ package me.sedattr.deluxeauctions.handlers;
 import me.sedattr.auctionsapi.cache.EnchantCache;
 import me.sedattr.deluxeauctions.DeluxeAuctions;
 import me.sedattr.deluxeauctions.configupdater.ConfigUpdater;
+import me.sedattr.deluxeauctions.database.DatabaseConfigMigrator;
 import me.sedattr.deluxeauctions.database.MySQLDatabase;
 import me.sedattr.deluxeauctions.database.SQLiteDatabase;
 import me.sedattr.deluxeauctions.managers.AuctionType;
@@ -189,10 +190,28 @@ public class DataHandler {
         }
     }
 
-    // Resolve database settings source: prefer database.yml, fall back to the
-    // legacy "database" section in config.yml so old setups keep working.
+    // Resolve database settings source: database.yml. A legacy "database" section in config.yml
+    // is moved there automatically; if that fails it is read in place so old setups keep working.
     public void setupDatabaseConfig() {
         File databaseFile = new File(DeluxeAuctions.getInstance().getDataFolder(), "database.yml");
+        if (!databaseFile.exists() && DeluxeAuctions.getInstance().configFile.isConfigurationSection("database")) {
+            List<String> log = new ArrayList<>();
+            DatabaseConfigMigrator.Result result = DatabaseConfigMigrator.migrate(DeluxeAuctions.getInstance().getDataFolder(), log);
+            for (String line : log)
+                Logger.sendConsoleMessage(line, result == DatabaseConfigMigrator.Result.FAILED ? Logger.LogLevel.WARN : Logger.LogLevel.INFO);
+
+            if (result == DatabaseConfigMigrator.Result.MIGRATED) {
+                // The in-memory config still holds the old section, and MenuHandler may call
+                // saveConfig(), which would write it straight back into config.yml.
+                DeluxeAuctions.getInstance().reloadConfig();
+                DeluxeAuctions.getInstance().configFile = DeluxeAuctions.getInstance().getConfig();
+
+                DeluxeAuctions.getInstance().databaseFile = getConfiguration("database.yml");
+                DeluxeAuctions.getInstance().databaseConfig = DeluxeAuctions.getInstance().databaseFile;
+                return;
+            }
+        }
+
         if (!databaseFile.exists() && DeluxeAuctions.getInstance().configFile.isConfigurationSection("database")) {
             DeluxeAuctions.getInstance().databaseConfig = DeluxeAuctions.getInstance().configFile;
             Logger.sendConsoleMessage("Using legacy database settings from config.yml. Move them to database.yml when possible.", Logger.LogLevel.WARN);

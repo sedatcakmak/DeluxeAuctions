@@ -1,7 +1,7 @@
 # PLUGIN DATABASE
 # Database settings moved here from config.yml.
-# Legacy support: if this file is missing but config.yml still has a "database"
-# section, those old settings are used instead. Keep this file to use it.
+# Migration: if this file is missing but config.yml still has a "database" section,
+# it is moved here automatically on startup (config.yml is backed up to backups/).
 database:
   type: "sqlite" # Database Types: mysql, sqlite.
   table_prefix: "da_"

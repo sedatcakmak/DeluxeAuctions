@@ -177,7 +177,7 @@ player_limits:
 
 # PLUGIN DATABASE
 # Database settings now live in database.yml.
-# Legacy support: if database.yml is absent, a "database" section here is still read.
+# An old "database" section here is moved to database.yml automatically on startup.
 
 # PLUGIN ADDONS
 addons:
