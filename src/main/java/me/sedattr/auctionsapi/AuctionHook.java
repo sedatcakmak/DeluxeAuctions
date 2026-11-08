@@ -290,8 +290,24 @@ public class AuctionHook {
                     .replace("%item_name%", meta.getDisplayName())));
 
         List<String> lore = itemSection.getStringList("lore");
-        List<String> newLore = new ArrayList<>();
-        if (!lore.isEmpty())
+        List<String> newLore = new ArrayList<>(lore.size());
+        if (!lore.isEmpty()) {
+            // Every one of these used to be recomputed per lore line, including two
+            // Bukkit#getOfflinePlayer lookups. This method runs for each visible auction on each
+            // menu refresh -- once per second, per viewer -- so the per-line work multiplied out
+            // into the thousands of redundant calls per tick on a busy server.
+            String economyText = auction.getEconomy().getText();
+            String bidAmount = String.valueOf(auction.getAuctionBids().getPlayerBids().size());
+            String bidderName = highestBid != null ? highestBid.getBidOwnerDisplayName() : "";
+            String bidPrice = economyText.replace("%price%", highestBid != null ? DeluxeAuctions.getInstance().numberFormat.format(highestBid.getBidPrice()) : "");
+            String auctionPrice = economyText.replace("%price%", DeluxeAuctions.getInstance().numberFormat.format(auction.getAuctionPrice()));
+            String auctionType = auction.getAuctionType().name();
+            String auctionTime = DeluxeAuctions.getInstance().timeFormat.formatTime(auction.getAuctionEndTime() - ZonedDateTime.now().toInstant().getEpochSecond(), "auction_times");
+            String sellerDisplayName = auction.getAuctionOwnerDisplayName();
+
+            String sellerName = null;
+            String buyerName = null;
+
             for (String line : lore) {
                 if (line.contains("%item_lore%")) {
                     List<String> itemLore = meta.getLore();
@@ -302,22 +318,30 @@ public class AuctionHook {
                     continue;
                 }
 
-                OfflinePlayer seller = Bukkit.getOfflinePlayer(auction.getAuctionOwner());
-                OfflinePlayer buyer = highestBid != null ? Bukkit.getOfflinePlayer(highestBid.getBidOwner()) : null;
+                // Account names are resolved on first use only: most layouts never ask for them.
+                if (sellerName == null && line.contains("%seller_name%")) {
+                    OfflinePlayer seller = Bukkit.getOfflinePlayer(auction.getAuctionOwner());
+                    sellerName = seller.getName() != null ? seller.getName() : "";
+                }
+                if (buyerName == null && line.contains("%buyer_name%")) {
+                    OfflinePlayer buyer = highestBid != null ? Bukkit.getOfflinePlayer(highestBid.getBidOwner()) : null;
+                    buyerName = (buyer != null && buyer.getName() != null) ? buyer.getName() : "";
+                }
 
                 newLore.add(Utils.colorize(line
-                        .replace("%bid_amount%", String.valueOf(auction.getAuctionBids().getPlayerBids().size()))
-                        .replace("%bid_price%", auction.getEconomy().getText().replace("%price%", highestBid != null ? DeluxeAuctions.getInstance().numberFormat.format(highestBid.getBidPrice()) : ""))
-                        .replace("%bidder_displayname%", highestBid != null ? highestBid.getBidOwnerDisplayName() : "")
-                        .replace("%buyer_displayname%", highestBid != null ? highestBid.getBidOwnerDisplayName() : "")
-                        .replace("%seller_displayname%", auction.getAuctionOwnerDisplayName())
-                        .replace("%seller_name%", seller.getName() != null ? seller.getName() : "")
-                        .replace("%buyer_name%", buyer != null ? (buyer.getName() != null ? buyer.getName() : "") : "")
-                        .replace("%auction_type%", auction.getAuctionType().name())
-                        .replace("%auction_price%", auction.getEconomy().getText().replace("%price%", DeluxeAuctions.getInstance().numberFormat.format(auction.getAuctionPrice())))
-                        .replace("%auction_time%", DeluxeAuctions.getInstance().timeFormat.formatTime(auction.getAuctionEndTime() - ZonedDateTime.now().toInstant().getEpochSecond(), "auction_times"))
+                        .replace("%bid_amount%", bidAmount)
+                        .replace("%bid_price%", bidPrice)
+                        .replace("%bidder_displayname%", bidderName)
+                        .replace("%buyer_displayname%", bidderName)
+                        .replace("%seller_displayname%", sellerDisplayName)
+                        .replace("%seller_name%", sellerName != null ? sellerName : "")
+                        .replace("%buyer_name%", buyerName != null ? buyerName : "")
+                        .replace("%auction_type%", auctionType)
+                        .replace("%auction_price%", auctionPrice)
+                        .replace("%auction_time%", auctionTime)
                 ));
             }
+        }
 
         meta.setLore(newLore);
 

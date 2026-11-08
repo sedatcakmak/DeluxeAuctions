@@ -73,6 +73,7 @@ public class DeluxeAuctions extends JavaPlugin {
     public String returnCategory = "";
     public double fileVersions = 1.4;
     public int version;
+    public String versionName = "unknown";
     public boolean locked = false;
     public boolean loaded = false;
     public boolean disabled = false;
@@ -100,10 +101,37 @@ public class DeluxeAuctions extends JavaPlugin {
             auctionAdmin.setExecutor(new AuctionAdminCommand());
     }
 
+    /**
+     * Bukkit's version string moved from the legacy {@code 1.21.4-R0.1-SNAPSHOT} layout to the
+     * date-based {@code 26.1.2-R0.1-SNAPSHOT} one. The old {@code substring(2, 4)} parse read
+     * {@code ".1"} out of the new layout and resolved to 1, so every {@code version > 13} feature
+     * gate fell back to 1.12 behaviour -- custom model data was never written to menu items,
+     * attribute hiding was skipped and the legacy damage-value item constructor was used.
+     */
+    private int detectVersion() {
+        this.versionName = Bukkit.getBukkitVersion().split("-")[0];
+
+        String[] parts = this.versionName.split("\\.");
+        try {
+            int major = Integer.parseInt(parts[0]);
+
+            // Legacy "1.x" scheme: the minor number is what every feature gate compares against.
+            if (major == 1)
+                return parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+
+            // Date-based scheme (25.x, 26.x, ...). These are newer than any 1.x release, so keep
+            // them ordered above the legacy numbers to leave the existing comparisons monotonic.
+            return 100 + major;
+        } catch (NumberFormatException e) {
+            getLogger().warning("Could not parse server version '" + this.versionName + "', assuming latest.");
+            return 100;
+        }
+    }
+
     @Override
     public void onEnable() {
-        this.version = Integer.parseInt(Bukkit.getBukkitVersion().substring(2, 4).replace(".", ""));
         instance = this;
+        this.version = detectVersion();
 
         saveDefaultConfig();
         this.metrics = new Metrics(this, 22020);
@@ -143,7 +171,7 @@ public class DeluxeAuctions extends JavaPlugin {
 
         this.metrics.addCustomChart(new Metrics.SingleLineChart("total_auctions", () -> AuctionCache.getAuctions().size()));
 
-        Logger.sendConsoleMessage("Your server is running on &f1." + this.version + "%level_color%.", Logger.LogLevel.INFO);
+        Logger.sendConsoleMessage("Your server is running on &f" + this.versionName + "%level_color%.", Logger.LogLevel.INFO);
         Logger.sendConsoleMessage("Plugin is enabled! Plugin Version: &fv" + getDescription().getVersion(), Logger.LogLevel.INFO);
     }
 

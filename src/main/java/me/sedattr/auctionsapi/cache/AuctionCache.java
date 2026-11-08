@@ -10,6 +10,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class AuctionCache {
     @Getter private static final ConcurrentHashMap<UUID, Auction> auctions = new ConcurrentHashMap<>();
@@ -88,97 +90,98 @@ public class AuctionCache {
         return getFilteredAuctions(type, rarity, category, search, "all");
     }
 
+    // Below this size the fork/join split costs more than the scan itself, and the common pool
+    // is shared with the rest of the server.
+    private static final int PARALLEL_THRESHOLD = 2_000;
+
     public static List<Auction> getFilteredAuctions(AuctionType type, String rarity, Category category, String search, String economyFilter) {
         if (auctions.isEmpty())
             return Collections.emptyList();
 
+        // filter(...) into an ordered collection: the old concurrent-set accumulator dropped
+        // encounter order, so auctions with equal sort keys reshuffled on every refresh.
+        return filteredStream(type, rarity, category, search, economyFilter)
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    /**
+     * Counts matches without materialising the list -- callers that only need the size were
+     * allocating an ArrayList of every matching auction to immediately throw it away.
+     */
+    public static int countFilteredAuctions(AuctionType type, String rarity, Category category, String search) {
+        return countFilteredAuctions(type, rarity, category, search, "all");
+    }
+
+    public static int countFilteredAuctions(AuctionType type, String rarity, Category category, String search, String economyFilter) {
+        if (auctions.isEmpty())
+            return 0;
+
+        return (int) filteredStream(type, rarity, category, search, economyFilter).count();
+    }
+
+    private static Stream<Auction> filteredStream(AuctionType type, String rarity, Category category, String search, String economyFilter) {
         boolean economyAll = economyFilter == null || economyFilter.isEmpty() || economyFilter.equalsIgnoreCase("all");
 
-        ConcurrentHashMap.KeySetView<Auction, Boolean> result = ConcurrentHashMap.newKeySet();
+        // Hoisted out of the per-auction body, where it was a YAML lookup plus a colour
+        // translation for every auction in the cache on every single filter pass.
+        String rarityLine = null;
+        if (rarity != null && !rarity.isEmpty()) {
+            String configured = DeluxeAuctions.getInstance().menusFile.getString("auctions_menu.rarity_sorter.types." + rarity);
+            if (configured != null && !configured.isEmpty())
+                rarityLine = Utils.colorize(configured);
+        }
 
-        auctions.values().parallelStream().forEach(auction -> {
-            if (!type.equals(AuctionType.ALL) && !auction.getAuctionType().equals(type))
-                return;
-            if (auction.isEnded())
-                return;
-            if (!economyAll) {
-                Economy economy = auction.getEconomy();
-                if (economy == null || !economyFilter.equals(economy.getKey()))
-                    return;
-            }
-            ItemStack itemStack = auction.getAuctionItem();
-            if (itemStack == null)
-                return;
-            if (category != null && !category.isGlobal())
-                if (!auction.getAuctionCategory().equals(category.getName()))
-                    return;
+        String lowerCaseSearch = (search == null || search.isEmpty()) ? null : search.toLowerCase(Locale.ENGLISH);
+        String finalRarityLine = rarityLine;
 
-            ItemMeta meta = itemStack.getItemMeta();
-            if (rarity != null && !rarity.isEmpty()) {
-                String line = DeluxeAuctions.getInstance().menusFile.getString("auctions_menu.rarity_sorter.types." + rarity);
-                if (line != null && !line.isEmpty()) {
-                    line = Utils.colorize(line);
+        Stream<Auction> stream = auctions.size() >= PARALLEL_THRESHOLD
+                ? auctions.values().parallelStream()
+                : auctions.values().stream();
 
-                    List<String> lore = meta.getLore();
-                    if (lore == null || lore.isEmpty())
-                        return;
+        return stream.filter(auction -> matchesFilter(auction, type, finalRarityLine, category, lowerCaseSearch, economyAll, economyFilter));
+    }
 
-                    if (lore.contains(line))
-                        result.add(auction);
+    private static boolean matchesFilter(Auction auction, AuctionType type, String rarityLine, Category category, String lowerCaseSearch, boolean economyAll, String economyFilter) {
+        if (!type.equals(AuctionType.ALL) && !auction.getAuctionType().equals(type))
+            return false;
+        if (auction.isEnded())
+            return false;
 
-                    return;
-                }
-            }
+        if (!economyAll) {
+            Economy economy = auction.getEconomy();
+            if (economy == null || !economyFilter.equals(economy.getKey()))
+                return false;
+        }
 
-            if (search != null && !search.isEmpty()) {
-                String lowerCaseSearch = search.toLowerCase(Locale.ENGLISH);
+        ItemStack itemStack = auction.getAuctionItem();
+        if (itemStack == null)
+            return false;
 
-                if (meta instanceof EnchantmentStorageMeta) {
-                    if (EnchantCache.isEnchantmentAdded(((EnchantmentStorageMeta) meta).getStoredEnchants(), lowerCaseSearch)) {
-                        result.add(auction);
-                        return;
-                    }
-                } else {
-                    if (EnchantCache.isEnchantmentAdded(itemStack.getEnchantments(), lowerCaseSearch)) {
-                        result.add(auction);
-                        return;
-                    }
-                }
+        if (category != null && !category.isGlobal())
+            if (!auction.getAuctionCategory().equals(category.getName()))
+                return false;
 
-                if (meta != null) {
-                    if (meta.getDisplayName() != null) {
-                        if (Utils.strip(meta.getDisplayName().toLowerCase(Locale.ENGLISH)).contains(lowerCaseSearch)) {
-                            result.add(auction);
-                            return;
-                        }
-                    }
+        ItemMeta meta = itemStack.getItemMeta();
+        if (rarityLine != null) {
+            List<String> lore = meta == null ? null : meta.getLore();
+            return lore != null && lore.contains(rarityLine);
+        }
 
-                    /*
-                    if (DeluxeAuctions.getInstance().version >= 21) {
-                        String itemName = meta.getItemName();
-                        if (itemName != null && !itemName.isEmpty()) {
-                            if (Utils.strip(itemName.toLowerCase()).contains(lowerCaseSearch)) {
-                                result.add(auction);
-                                return;
-                            }
-                        }
-                    }
-                    */
-                }
+        if (lowerCaseSearch != null) {
+            if (meta instanceof EnchantmentStorageMeta) {
+                if (EnchantCache.isEnchantmentAdded(((EnchantmentStorageMeta) meta).getStoredEnchants(), lowerCaseSearch))
+                    return true;
+            } else if (EnchantCache.isEnchantmentAdded(itemStack.getEnchantments(), lowerCaseSearch))
+                return true;
 
-                if (itemStack.getType().name().replace("_", " ").toLowerCase(Locale.ENGLISH).contains(lowerCaseSearch))
-                    result.add(auction);
+            if (meta != null && meta.getDisplayName() != null)
+                if (Utils.strip(meta.getDisplayName().toLowerCase(Locale.ENGLISH)).contains(lowerCaseSearch))
+                    return true;
 
-                return;
-            } else if (category != null && category.isGlobal()) {
-                result.add(auction);
-                return;
-            }
+            return itemStack.getType().name().replace("_", " ").toLowerCase(Locale.ENGLISH).contains(lowerCaseSearch);
+        }
 
-            result.add(auction);
-        });
-
-        return new ArrayList<>(result);
+        return true;
     }
 
     public static List<Auction> getOnGoingAuctions(List<Auction> filteredAuctions, SortType sort, int page, int slot) {
@@ -191,15 +194,18 @@ public class AuctionCache {
 
         switch (sort) {
             case LOWEST_PRICE -> filteredAuctions.sort(Comparator.comparing(Auction::getAuctionPrice));
-            case HIGHEST_PRICE -> {
-                filteredAuctions.sort(Comparator.comparing(Auction::getAuctionPrice));
-                Collections.reverse(filteredAuctions);
+            case HIGHEST_PRICE -> filteredAuctions.sort(Comparator.comparing(Auction::getAuctionPrice).reversed());
+            case ALPHABETICAL -> {
+                // Decorate-sort-undecorate. The old comparator ran Utils.strip -- a full colour
+                // translation pass -- on both operands of every comparison, so an n-element page
+                // cost O(n log n) regex passes instead of n.
+                Map<Auction, String> names = new IdentityHashMap<>(filteredAuctions.size());
+                for (Auction auction : filteredAuctions)
+                    names.put(auction, Utils.strip(Utils.getDisplayName(auction.getAuctionItem())));
+
+                filteredAuctions.sort(Comparator.comparing(names::get, String.CASE_INSENSITIVE_ORDER));
             }
-            case ALPHABETICAL -> filteredAuctions.sort((a, b) -> Utils.strip(Utils.getDisplayName(a.getAuctionItem())).compareToIgnoreCase(Utils.strip(Utils.getDisplayName(b.getAuctionItem()))));
-            case MOST_BIDS -> {
-                filteredAuctions.sort(Comparator.comparingInt(a -> a.getAuctionBids().getPlayerBids().size()));
-                Collections.reverse(filteredAuctions);
-            }
+            case MOST_BIDS -> filteredAuctions.sort(Comparator.comparingInt((Auction a) -> a.getAuctionBids().getPlayerBids().size()).reversed());
             case ENDING_SOON -> filteredAuctions.sort(Comparator.comparing(Auction::getAuctionEndTime));
             case RANDOM -> Collections.shuffle(filteredAuctions);
         }

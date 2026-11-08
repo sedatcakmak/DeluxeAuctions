@@ -109,8 +109,8 @@ public class CategoryCache {
                 return false;
 
             int itemModel;
-            if (DeluxeAuctions.getInstance().version > 13 && itemMeta.hasCustomModelData())
-                itemModel = itemMeta.getCustomModelData();
+            if (DeluxeAuctions.getInstance().version > 13)
+                itemModel = Utils.getCustomModelData(itemMeta);
             else
                 itemModel = itemStack.getDurability();
 

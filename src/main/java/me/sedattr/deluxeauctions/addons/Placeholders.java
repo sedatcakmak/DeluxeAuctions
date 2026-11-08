@@ -33,12 +33,12 @@ public class Placeholders extends PlaceholderExpansion {
 
         // %auction_bin_auctions%
         if (identifier.contains("bin_auctions")) {
-            return String.valueOf(AuctionCache.getFilteredAuctions(AuctionType.BIN, null, null, null).size());
+            return String.valueOf(AuctionCache.countFilteredAuctions(AuctionType.BIN, null, null, null));
         }
 
         // %auction_normal_auctions%
         if (identifier.startsWith("normal_auctions")) {
-            return String.valueOf(AuctionCache.getFilteredAuctions(AuctionType.NORMAL, null, null, null).size());
+            return String.valueOf(AuctionCache.countFilteredAuctions(AuctionType.NORMAL, null, null, null));
         }
 
         // %auction_bid_auctions%
@@ -68,7 +68,7 @@ public class Placeholders extends PlaceholderExpansion {
             if (category == null)
                 return "0";
 
-            return String.valueOf(AuctionCache.getFilteredAuctions(AuctionType.ALL, null, CategoryCache.getCategories().get(category), null).size());
+            return String.valueOf(AuctionCache.countFilteredAuctions(AuctionType.ALL, null, CategoryCache.getCategories().get(category), null));
         }
 
         return "";

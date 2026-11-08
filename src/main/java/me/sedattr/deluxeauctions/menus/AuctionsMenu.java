@@ -804,14 +804,23 @@ public class AuctionsMenu implements MenuManager {
             type = "no_permission";
 
         List<String> lore = DeluxeAuctions.getInstance().messagesFile.getStringList("lores.category_items." + type);
-        List<String> newLore = new ArrayList<>();
+        List<String> newLore = new ArrayList<>(lore.size());
+
+        // Counting a category means one full pass over the auction cache, and this method runs
+        // for every category on every open. It used to run once per description line on top of
+        // that, and materialised the whole match list just to read its size.
+        String categoryItemAmount = null;
+
         for (String line : lore) {
             if (line.contains("%category_description%")) {
-                List<String> description = auctionCategory.getDescription();
-                if (!description.isEmpty()) {
-                    for (String desc : description)
-                        newLore.add(Utils.colorize(desc
-                                .replace("%category_item_amount%", String.valueOf(AuctionCache.getFilteredAuctions(this.playerAuction.getAuctionType(), this.playerAuction.getRarityType(), auctionCategory, this.playerAuction.getSearch(), this.playerAuction.getEconomyFilter()).size()))));
+                for (String desc : auctionCategory.getDescription()) {
+                    if (desc.contains("%category_item_amount%")) {
+                        if (categoryItemAmount == null)
+                            categoryItemAmount = String.valueOf(AuctionCache.countFilteredAuctions(this.playerAuction.getAuctionType(), this.playerAuction.getRarityType(), auctionCategory, this.playerAuction.getSearch(), this.playerAuction.getEconomyFilter()));
+
+                        newLore.add(Utils.colorize(desc.replace("%category_item_amount%", categoryItemAmount)));
+                    } else
+                        newLore.add(Utils.colorize(desc));
                 }
 
                 continue;

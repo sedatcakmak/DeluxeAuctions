@@ -14,6 +14,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.components.CustomModelDataComponent;
 import org.bukkit.util.io.BukkitObjectInputStream;
 import org.bukkit.util.io.BukkitObjectOutputStream;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -115,25 +116,38 @@ public class Utils {
         item.setItemMeta(meta);
     }
 
+    private static final Pattern HEX_PATTERN = Pattern.compile("#([a-fA-F0-9]{6})");
+
     public static String hex(String message) {
-        Pattern pattern = Pattern.compile("#[a-fA-F0-9]{6}");
+        if (message == null || message.isEmpty())
+            return "";
 
-        Matcher matcher = pattern.matcher(message);
-        while (matcher.find()) {
-            String hexCode = message.substring(matcher.start(), matcher.end());
-            String replaceSharp = hexCode.replace('#', 'x');
+        // Fast path: no '#' means there is nothing to translate, which holds for almost every
+        // config line. Avoids allocating a Matcher for each lore line of each item.
+        if (message.indexOf('#') < 0)
+            return ChatColor.translateAlternateColorCodes('&', message);
 
-            char[] ch = replaceSharp.toCharArray();
-            StringBuilder builder = new StringBuilder();
-            for (char c : ch) {
-                builder.append("&").append(c);
-            }
+        Matcher matcher = HEX_PATTERN.matcher(message);
+        if (!matcher.find())
+            return ChatColor.translateAlternateColorCodes('&', message);
 
-            message = message.replace(hexCode, builder.toString());
-            matcher = pattern.matcher(message);
-        }
+        // Single pass. The previous version recompiled the Pattern on every call, ran
+        // String#replace across the whole message per match and then restarted matching from
+        // index 0 -- quadratic on lines with several hex colours, and this runs for every lore
+        // line of every item on every menu refresh (once per second, per viewer).
+        StringBuilder builder = new StringBuilder(message.length() + 16);
+        do {
+            String hex = matcher.group(1);
 
-        return ChatColor.translateAlternateColorCodes('&', message);
+            StringBuilder replacement = new StringBuilder(14).append("&x");
+            for (int i = 0; i < hex.length(); i++)
+                replacement.append('&').append(hex.charAt(i));
+
+            matcher.appendReplacement(builder, replacement.toString());
+        } while (matcher.find());
+        matcher.appendTail(builder);
+
+        return ChatColor.translateAlternateColorCodes('&', builder.toString());
     }
 
     public static String colorize(String s) {
@@ -144,6 +158,60 @@ public class Utils {
             return ChatColor.translateAlternateColorCodes('&', s);
 
         return hex(s);
+    }
+
+    // 1.21.4 turned custom_model_data into a structured component (floats/flags/strings/colors)
+    // and deprecated the plain int setter. Resource packs select their model through a
+    // range_dispatch on floats[0], so writing only the legacy int leaves modern packs with no
+    // value to dispatch on and the item renders with its default texture.
+    private static final boolean CUSTOM_MODEL_DATA_COMPONENT = supportsCustomModelDataComponent();
+
+    private static boolean supportsCustomModelDataComponent() {
+        try {
+            ItemMeta.class.getMethod("setCustomModelDataComponent", Class.forName("org.bukkit.inventory.meta.components.CustomModelDataComponent"));
+            return true;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
+    /**
+     * Writes {@code model} in whichever representation the running server understands. The
+     * guarded branch keeps the component classes off the resolution path on servers that predate
+     * them, so this still links on legacy versions.
+     */
+    public static void applyCustomModelData(ItemMeta meta, int model) {
+        if (meta == null || model == 0)
+            return;
+
+        if (!CUSTOM_MODEL_DATA_COMPONENT) {
+            meta.setCustomModelData(model);
+            return;
+        }
+
+        CustomModelDataComponent component = meta.getCustomModelDataComponent();
+        component.setFloats(Collections.singletonList((float) model));
+        meta.setCustomModelDataComponent(component);
+    }
+
+    /**
+     * Reads the custom model data back, covering both representations so that config-driven
+     * matching (categories, blacklist) keeps working for items that carry only the component.
+     */
+    public static int getCustomModelData(ItemMeta meta) {
+        if (meta == null)
+            return 0;
+
+        if (meta.hasCustomModelData())
+            return meta.getCustomModelData();
+
+        if (CUSTOM_MODEL_DATA_COMPONENT && meta.hasCustomModelDataComponent()) {
+            List<Float> floats = meta.getCustomModelDataComponent().getFloats();
+            if (floats != null && !floats.isEmpty())
+                return floats.getFirst().intValue();
+        }
+
+        return 0;
     }
 
     // Component.text(legacyString) embeds Spigot's §x§R§R§G§G§B§B hex sequences as literal text.
@@ -607,8 +675,8 @@ public class Utils {
                     meta.addItemFlags(ItemFlag.valueOf(flag));
         }
 
-        if (DeluxeAuctions.getInstance().version > 13 && section.getInt("model", 0) != 0)
-            meta.setCustomModelData(section.getInt("model"));
+        if (DeluxeAuctions.getInstance().version > 13)
+            applyCustomModelData(meta, section.getInt("model", 0));
 
         item.setItemMeta(meta);
 

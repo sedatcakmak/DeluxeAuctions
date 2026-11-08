@@ -32,8 +32,8 @@ public class BlacklistHandler {
             return false;
 
         int model;
-        if (DeluxeAuctions.getInstance().version > 13 && itemMeta.hasCustomModelData())
-            model = itemMeta.getCustomModelData();
+        if (DeluxeAuctions.getInstance().version > 13)
+            model = Utils.getCustomModelData(itemMeta);
         else
             model = item.getDurability();
 
